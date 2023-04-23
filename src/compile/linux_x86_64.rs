@@ -72,20 +72,18 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
     writeln!(writer, "    add     rsp, 40")?;
     writeln!(writer, "    ret")?;
 
-    if crate::config::ENABLE_EXPORTED_FUNCTIONS && !args.lib_mode {
+    if !crate::config::ENABLE_EXPORTED_FUNCTIONS && !args.lib_mode {
         writeln!(writer, "global _start")?;
         writeln!(writer, "_start:")?; 
         writeln!(writer, "    lea rbp, [rel ret_stack]")?;
         writeln!(writer, "    call main")?;
         writeln!(writer, "    jmp end")?;
-
     }
 
 
     let mut ti = 0;
     while ti < tokens.len() {
         let token = &tokens[ti];
-        // println!("{:?}", token);
         if debug {
             writeln!(writer, "addr_{ti}:")?;
             if token.typ == OpType::Instruction(InstructionType::PushInt) {
@@ -116,8 +114,8 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     _ => ()
                 }
             }
-
         }
+
         match token.typ.clone() {
             // stack
 
@@ -130,6 +128,13 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     },
                     InstructionType::PushStr => {
                         writeln!(writer, "    mov rax, {}", token.text.len())?;
+                        writeln!(writer, "    push rax")?;
+                        writeln!(writer, "    mov rax, str_{}", strings.len())?;
+                        writeln!(writer, "    push rax")?;
+                        strings.push(token.text.clone());
+                        ti += 1;
+                    }
+                    InstructionType::PushCStr => {
                         writeln!(writer, "    push rax")?;
                         writeln!(writer, "    mov rax, str_{}", strings.len())?;
                         writeln!(writer, "    push rax")?;
@@ -198,7 +203,7 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     InstructionType::Load32 => {
                         writeln!(writer, "    pop rax")?;
                         writeln!(writer, "    xor rbx, rbx")?;
-                        writeln!(writer, "    mov bl, dword [rax]")?;
+                        writeln!(writer, "    mov ebx, dword [rax]")?;
                         writeln!(writer, "    push rbx")?;
                         ti += 1;
                     }
@@ -206,13 +211,13 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     InstructionType::Store32 => {
                         writeln!(writer, "    pop rbx")?;
                         writeln!(writer, "    pop rax")?;
-                        writeln!(writer, "    mov dword[rax], bl")?;
+                        writeln!(writer, "    mov dword[rax], ebx")?;
                         ti += 1;
                     }
                     InstructionType::Load64 => {
                         writeln!(writer, "    pop rax")?;
                         writeln!(writer, "    xor rbx, rbx")?;
-                        writeln!(writer, "    mov bl, qword [rax]")?;
+                        writeln!(writer, "    mov rbx, qword [rax]")?;
                         writeln!(writer, "    push rbx")?;
                         ti += 1;
                     }
@@ -220,7 +225,7 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     InstructionType::Store64 => {
                         writeln!(writer, "    pop rbx")?;
                         writeln!(writer, "    pop rax")?;
-                        writeln!(writer, "    mov qword [rax], bl")?;
+                        writeln!(writer, "    mov qword [rax], rbx")?;
                         ti += 1;
                     }
         
@@ -421,6 +426,7 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     },
                     InstructionType::Return => {
 
+                        // Experimental feature exported functions
                         if crate::config::ENABLE_EXPORTED_FUNCTIONS && should_push_ret {
                             writeln!(writer, "    pop rdx")?;
                             should_push_ret = false;
@@ -479,7 +485,7 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
                     }
                     KeywordType::End => {
                         if ti + 1 != token.jmp {
-                            // writeln!(writer, "    jmp addr_{}", token.jmp)?;
+                            writeln!(writer, "    jmp addr_{}", token.jmp)?;
                         }
                         ti += 1;
                     },
@@ -584,7 +590,7 @@ pub fn compile(tokens: &[Operator], args: &Args) -> Result<i32>{
         }
     }
     writeln!(writer, "addr_{ti}:")?;
-    if crate::config::ENABLE_EXPORTED_FUNCTIONS && !args.lib_mode {
+    if !crate::config::ENABLE_EXPORTED_FUNCTIONS && !args.lib_mode {
         writeln!(writer, "end:")?;
         writeln!(writer, "    mov rax, 60")?;
         writeln!(writer, "    mov rdi, 0")?;

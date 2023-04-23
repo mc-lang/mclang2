@@ -16,3 +16,9 @@ const FS_O_PATH 2097152 end // open descriptor for obtaining permissions and sta
 const FS_O_SYNC 1052672 end // wait for IO to complete before returning
 const FS_O_TMPFILE 4259840 end // create an unnamed, unreachable (via any other open call) temporary file
 const FS_O_TRUNC 512 end // if file exists, ovewrite it (careful!)
+
+
+fn fs_read_to_string with int ptr returns int ptr then
+    
+
+done

@@ -7,6 +7,7 @@ pub enum InstructionType {
     // stack
     PushInt,
     PushStr,
+    PushCStr,
     Drop,
     Print,
     Dup,
@@ -131,7 +132,7 @@ impl Operator {
     //     self.types = (args, rets);
     //     (*self).clone()
     // }
-
+    
 }
 
 impl OpType {
@@ -139,9 +140,10 @@ impl OpType {
         match (*self).clone() {
             OpType::Instruction(instruction) => {
                 match instruction {
-
+                    
                     InstructionType::PushInt => "Number",
                     InstructionType::PushStr => "String",
+                    InstructionType::PushCStr => "CString",
                     InstructionType::Print => "_dbg_print",
                     InstructionType::Dup => "dup",
                     InstructionType::Drop => "drop",
@@ -235,6 +237,7 @@ pub enum TokenType {
     Word,
     Int,
     String,
+    CString,
     Char
 }
 
@@ -254,6 +257,7 @@ impl TokenType {
             TokenType::Word => "Word",
             TokenType::Int => "Int",
             TokenType::String => "String",
+            TokenType::CString => "CString",
             TokenType::Char => "Char"
         }.to_string()
     }

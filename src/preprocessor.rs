@@ -45,6 +45,7 @@ pub struct Preprocessor<'a> {
     pub functions: Functions,
     pub memories: Memories,
     pub constants: Constants,
+    pub in_function: Option<String>,
     args: &'a Args
 }
 
@@ -57,6 +58,7 @@ impl<'a> Preprocessor<'a> {
             functions: HashMap::new(),
             memories: HashMap::new(),
             constants: HashMap::new(),
+            in_function: None
         }
     }
 
@@ -65,7 +67,7 @@ impl<'a> Preprocessor<'a> {
         // println!("pre: has do tokens: {:?}", self.program.iter().map(|t| if t.typ == OpType::Keyword(KeywordType::Do) {Some(t)} else {None} ).collect::<Vec<Option<&Operator>>>());
         
         let mut f_inline = false;
-        let mut f_extern = false;
+        let mut f_export = false;
 
         let mut program: Vec<Operator> = Vec::new();
 
@@ -94,7 +96,7 @@ impl<'a> Preprocessor<'a> {
                     
                     let mut include_code = String::new();
                     let mut pth = PathBuf::new();
-                    if include_path.text.chars().collect::<Vec<char>>()[0] == '.' {
+                    if include_path.text.chars().next().unwrap() == '.' {
                         let p = Path::new(include_path.loc.0.as_str());
                         let p = p.parent().unwrap();
                         let p = p.join(&include_path.text);
@@ -108,6 +110,7 @@ impl<'a> Preprocessor<'a> {
                             
                             if p.exists() {
                                 include_code = std::fs::read_to_string(p)?;
+                                break;
                             }
                             
                         }
@@ -261,6 +264,9 @@ impl<'a> Preprocessor<'a> {
                         }
                         let mut pre = self.clone();
                         pre.program = prog;
+                        if name.text.chars().next().unwrap() == '.' {
+                            pre.in_function = Some(name.text[1..].to_string());
+                        }
                         pre.preprocess()?;
                         prog = pre.get_ops();
 
@@ -271,8 +277,8 @@ impl<'a> Preprocessor<'a> {
                             tokens: Some(prog)
                         });
                         
-                    } else if f_extern {
-                        f_extern = false;
+                    } else if f_export {
+                        f_export = false;
                         self.functions.insert(name.text.clone(), Function{
                             loc: name.loc.clone(),
                             name: name.text.clone(),
@@ -341,9 +347,10 @@ impl<'a> Preprocessor<'a> {
 
                     let mut name = rtokens.pop().unwrap();
                     // let mut should_warn = false;
+                    
 
-                    if let '0'..='9' = name.text.chars().next().unwrap() {
-                        lerror!(&name.loc, "Constant name starts with a number which is not allowed");
+                    if let '0'..='9' | '.' = name.text.chars().next().unwrap() {
+                        lerror!(&name.loc, "Constant name starts with a number or dot which is not allowed");
                         return Err(eyre!(""));
                     }
 
@@ -363,6 +370,7 @@ impl<'a> Preprocessor<'a> {
                             }
                         }
                     }
+
                     // if should_warn {
                         //TODO: add -W option in cli args to enable more warnings
                         //lwarn!(&name.loc, "Constant name contains '(' or ')', this character is not supported but will be replaced with '__OP_PAREN__' or '__CL_PAREN__' respectively ");
@@ -402,8 +410,8 @@ impl<'a> Preprocessor<'a> {
                 }  
 
                 OpType::Keyword(KeywordType::Inline) => {
-                    if f_extern {
-                        lerror!(&op.loc, "Function is already marked as extern, function cannot be inline and extern at the same time");
+                    if f_export {
+                        lerror!(&op.loc, "Function is already marked as exported, function cannot be inline and exported at the same time");
                         return Err(eyre!(""));
                     } else if f_inline {
                         lerror!(&op.loc, "Function is already marked as inline, remove this inline Keyword");
@@ -414,14 +422,18 @@ impl<'a> Preprocessor<'a> {
                 }
 
                 OpType::Keyword(KeywordType::Export) => {
-                    if f_inline {
-                        lerror!(&op.loc, "Function is already marked as inline, function cannot be inline and extern at the same time");
+                    if !crate::config::ENABLE_EXPORTED_FUNCTIONS {
+                        lerror!(&op.loc, "Experimental feature Exported functions not enabled");
                         return Err(eyre!(""));
-                    } else if f_extern {
+                    }
+                    if f_inline {
+                        lerror!(&op.loc, "Function is already marked as inline, function cannot be inline and exported at the same time");
+                        return Err(eyre!(""));
+                    } else if f_export {
                         lerror!(&op.loc, "Function is already marked as extern, remove this extern Keyword");
                         return Err(eyre!(""));
                     } else {
-                        f_extern = true;
+                        f_export = true;
                     }
                 }
 

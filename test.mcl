@@ -1,12 +1,7 @@
-// include "std.mcl"
-fn mcl_print with int ptr returns void then
-    1 1 syscall3 drop
-done
+include "std.mcl"
 
-fn mcl_dump with int returns void then
-    _dbg_print
-done
+fn main with int ptr returns void then
+    // p l 
+    c"bad, wait no, good\n\0" dup cstr_len swap puts
 
-fn main with void returns void then
-    "hi\n" mcl_print
 done

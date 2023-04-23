@@ -48,7 +48,7 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                         ip += 1;
                     },
                     InstructionType::PushStr => {
-                        if  op.addr.is_none() {
+                        if op.addr.is_none() {
                             stack.push(op.text.len()); // string len
                             stack.push(string_idx + crate::MEM_SZ);
                             
@@ -58,6 +58,23 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                             }
                         } else {
                             stack.push(op.text.len()); 
+                            if let Some(addr) = op.addr {
+                                stack.push(addr);
+                            }
+                        }
+        
+        
+                        ip += 1;
+                    },
+                    InstructionType::PushCStr => {
+                        if op.addr.is_none() {
+                            stack.push(string_idx + crate::MEM_SZ);
+                            
+                            for c in op.text.bytes() {
+                                mem[crate::MEM_SZ + string_idx] = u64::from(c);
+                                string_idx += 1;
+                            }
+                        } else {
                             if let Some(addr) = op.addr {
                                 stack.push(addr);
                             }
@@ -113,7 +130,7 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                     InstructionType::Load32 |
                     InstructionType::Load64 => {
                         let a = stack_pop(&mut stack, &pos)?;
-                        if a > crate::MEM_SZ {
+                        if a > crate::MEM_SZ + crate::STRING_SZ {
                             lerror!(&op.loc, "Invalid memory address {a}");
                             return Ok(1);
                         }

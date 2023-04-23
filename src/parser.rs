@@ -70,7 +70,8 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
     }
     if !stack.is_empty() {
         // println!("{:?}", stack);
-        lerror!(&program[stack.pop().expect("Empy stack")].clone().loc,"Unclosed block, {:?}", program[stack.pop().expect("Empy stack")].clone());
+        let i = stack.pop().expect("Empy stack");
+        lerror!(&program[i].clone().loc,"Unclosed block, {:?}", program[i].clone());
         return Err(eyre!("Unclosed block"));
     }
 
@@ -120,7 +121,10 @@ impl<'a> Parser<'a> {
                 },
                 TokenType::String => {
                     tokens.push(Operator::new(OpType::Instruction(InstructionType::PushStr), token.typ, 0, token.text.clone(), token.file.clone(), token.line, token.col));
-                }
+                },
+                TokenType::CString => {
+                    tokens.push(Operator::new(OpType::Instruction(InstructionType::PushCStr), token.typ, 0, token.text.clone(), token.file.clone(), token.line, token.col));
+                },
                 TokenType::Char => {
                     let c = token.text.clone();
                     if c.len() != 1 {

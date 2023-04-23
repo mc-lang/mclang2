@@ -12,6 +12,9 @@ fn lex_word(s: String, tok_type: TokenType) -> (TokenType, String) {
         s if tok_type == TokenType::String => {
             (TokenType::String, s)
         }
+        s if tok_type == TokenType::CString => {
+            (TokenType::CString, s)
+        }
         s if tok_type == TokenType::Char => {
             (TokenType::Char, s)
         }
@@ -72,17 +75,35 @@ fn lex_line(text: &str) -> Vec<(usize, String, TokenType)> {
 
         } else {
 
-            col_end = find_col(text, col, |x, _| x.is_whitespace());
-            let t = &text[col..col_end];
-            
-            if t == "//" {
-                return tokens;
+            if &text[col..=col] == "c" && text.len() - 1 + col > 0 && &text[col+1..=col+1] == "\"" {
+                col_end = find_col(text, col + 2, |x, x2| x == '"' && x2 != '\\');
+                let t = &text[(col + 2)..col_end];
+                let mut t = t.replace("\\n", "\n")
+                                    .replace("\\t", "\t")
+                                    .replace("\\r", "\r")
+                                    .replace("\\\'", "\'")
+                                    .replace("\\\"", "\"")
+                                    .replace("\\0", "\0");
+                
+                if !t.is_empty() {
+                    t.push('\0');
+                    tokens.push((col, t.to_string(), TokenType::CString));
+                }
+                col = find_col(text, col_end + 1, |x, _| !x.is_whitespace());
+                
+            } else {
+                col_end = find_col(text, col, |x, _| x.is_whitespace());
+                let t = &text[col..col_end];
+                
+                if t == "//" {
+                    return tokens;
+                }
+                
+                if !t.is_empty() {
+                    tokens.push((col, t.to_string(), TokenType::Word));
+                }
+                col = find_col(text, col_end, |x, _| !x.is_whitespace());
             }
-
-            if !t.is_empty() {
-                tokens.push((col, t.to_string(), TokenType::Word));
-            }
-            col = find_col(text, col_end, |x, _| !x.is_whitespace());
         }
     }
     tokens

@@ -19,7 +19,7 @@ use color_eyre::Result;
 use eyre::eyre;
 
 #[derive(Parser, Debug, Clone)]
-#[command(author, version, about, long_about = None)]
+#[command(author=env!("CARGO_PKG_AUTHORS"), version=env!("CARGO_PKG_VERSION"), about=env!("CARGO_PKG_DESCRIPTION"), long_about=env!("CARGO_PKG_DESCRIPTION"))]
 pub struct Args {
     /// Input source file
     #[arg(long, short)] 

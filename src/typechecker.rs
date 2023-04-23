@@ -191,7 +191,10 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                     InstructionType::PushStr => {
                         stack.push(Types::Int);
                         stack.push(Types::Ptr);
-
+                    },
+                    InstructionType::PushCStr => {
+                        stack.push(Types::Int);
+                        stack.push(Types::Ptr);
                     },
                     InstructionType::Drop => {
                         stack_pop(&mut stack, &op, &[Types::Any])?;
