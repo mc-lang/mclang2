@@ -1,7 +1,13 @@
+const FS_O_RDONLY 0 end
+const FS_O_WRONLY 1 end
+const FS_O_RDWR 2 end
+
 const FS_O_APPEND 1024 end // append to existing file
+const FS_O_TRUNC 512 end // if file exists, ovewrite it (careful!)
+const FS_O_CREAT 64 end // create file if it doesn’t exist
+
 const FS_O_ASYNC 8192 end // use signal-driven IO
 const FS_O_CLOEXEC 524288 end // use close-on-exec (avoid race conditions and lock contentions)
-const FS_O_CREAT 64 end // create file if it doesn’t exist
 const FS_O_DIRECT 16384 end // bypass cache (slower)
 const FS_O_DIRECTORY 65536 end // fail if pathname isn’t a directory
 const FS_O_DSYNC 4096 end // ensure output is sent to hardware and metadata written before return
@@ -15,7 +21,6 @@ const FS_O_NDELAY 2048 end // same as O_NONBLOCK
 const FS_O_PATH 2097152 end // open descriptor for obtaining permissions and status of a file but does not allow read/write operations
 const FS_O_SYNC 1052672 end // wait for IO to complete before returning
 const FS_O_TMPFILE 4259840 end // create an unnamed, unreachable (via any other open call) temporary file
-const FS_O_TRUNC 512 end // if file exists, ovewrite it (careful!)
 
 
 fn fs_read_to_string with int ptr returns int ptr then

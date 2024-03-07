@@ -1,6 +1,18 @@
 /target
-/a
+/*
 
-test
-test.nasm
-test.o
+# files
+!/.gitignore
+!/cargo.lock
+!/cargo.toml
+!/README.md
+
+# folders
+!/.github
+!/editor
+!/examples
+!/include
+!/playground
+!/src
+!/tests
+!/tools

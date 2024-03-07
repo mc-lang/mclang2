@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 
+use anyhow::{Result, bail};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,6 +69,7 @@ pub enum InstructionType {
     FnCall,
     MemUse,
     ConstUse,
+    StructUse,
 
     Return,
     None // Used for macros and any other non built in word definitions
@@ -90,13 +93,21 @@ pub enum KeywordType {
     FunctionDone,
     Inline,
     Export,
-    Struct
+    Struct,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum InternalType {
+    Arrow,
+    StructAlloc {
+        name: String
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
 pub enum OpType {
     Keyword(KeywordType),
-    Instruction(InstructionType)
+    Instruction(InstructionType),
+    Internal(InternalType)
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +197,7 @@ impl OpType {
                     InstructionType::MemUse => "Memory use (internal)",
                     InstructionType::FnCall => "Function Call (Internal)",
                     InstructionType::ConstUse => "Constant Use (Internal)",
+                    InstructionType::StructUse => "Struct Use (Internal)",
                     InstructionType::Return => "return",
                     InstructionType::TypeBool => "bool",
                     InstructionType::TypePtr => "ptr",
@@ -217,6 +229,12 @@ impl OpType {
                     KeywordType::Struct => "struct",
                 }
             }
+            OpType::Internal(t) => {
+                match t {
+                    InternalType::Arrow => "->",
+                    InternalType::StructAlloc{..} => "Struct alloc ( internal )",
+                }
+            },
             
         }.to_string()
     }
@@ -269,15 +287,106 @@ pub type Loc = (String, usize, usize);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Types {
+    Any,
     Bool,
     Ptr,
-    Int,
     Void,
-    Any
-    // U8,
-    // U16,
-    // U32,
-    // U64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    
+    #[allow(dead_code)] //TODO: Implement custom types
+    Custom{
+        size: u64 // in bytes
+    },
     // todo: add signed numbers since we dont have them yet lol
 }
 
+impl Types {
+    pub fn get_size(&self) -> u64 {
+        match *self {
+            Types::Any => 0, // any cant be a known size
+            Types::Void => 0,
+            Types::Bool => 1,
+            Types::U8 |
+            Types::I8 => 1,
+            Types::U16 |
+            Types::I16 => 2,
+            Types::U32 |
+            Types::I32 => 4,
+            Types::Ptr |
+            Types::U64 |
+            Types::I64 => 8,
+            Types::Custom { size } => size,
+        }
+    }
+    pub fn from_string<S: Into<String> + std::fmt::Display>(s: &S) -> Result<Self> {
+        match s.to_string().as_str() {
+            "any" => Ok(Types::Any),
+            "void" => Ok(Types::Void),
+            "bool" => Ok(Types::Bool),
+            "u8" => Ok(Types::U8),
+            "i8" => Ok(Types::I8),
+            "u16" => Ok(Types::U16),
+            "i16" => Ok(Types::I16),
+            "u32" => Ok(Types::U32),
+            "i32" => Ok(Types::I32),
+            "ptr" => Ok(Types::Ptr),
+            "u64" => Ok(Types::U64),
+            "i64" => Ok(Types::I64),
+            _ => bail!("Unknown type {s}")
+        }
+    }
+}
+
+
+
+
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub loc: Loc,
+    pub name: String,
+    pub inline: bool,
+    pub tokens: Option<Vec<Operator>>
+}
+
+#[derive(Debug, Clone)]
+pub struct Constant {
+    pub loc: Loc,
+    pub name: String
+}
+
+#[derive(Debug, Clone)]
+pub struct Memory {
+    pub loc: Loc,
+    pub id: usize
+    
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDef {
+    pub loc: Loc,
+    pub name: String,
+    pub fields: Vec<(String, Types)>
+}
+
+pub type Functions = HashMap<String, Function>;
+pub type Memories = HashMap<String, Memory>;
+pub type Constants = HashMap<String, Constant>;
+pub type StructDefs = HashMap<String, StructDef>;
+
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub ops: Vec<Operator>,
+    pub functions: Functions,
+    pub memories: Memories,
+    pub constants: Constants,
+    pub struct_defs: StructDefs,
+    pub struct_allocs: HashMap<String, String>
+}

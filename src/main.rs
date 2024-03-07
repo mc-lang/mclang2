@@ -1,7 +1,6 @@
 #![allow(clippy::wildcard_imports)]
 #![allow(clippy::too_many_lines)]
-mod constants;
-mod interpret;
+mod definitions;
 mod util;
 mod compile;
 mod parser;
@@ -11,27 +10,22 @@ mod typechecker;
 mod precompiler;
 mod config;
 mod errors;
+pub mod test;
 use config::*;
 use std::{fs, collections::HashMap};
 
 use clap::Parser;
-use color_eyre::Result;
-use eyre::eyre;
+use anyhow::{Result, bail};
 
 #[derive(Parser, Debug, Clone)]
 #[command(author=env!("CARGO_PKG_AUTHORS"), version=env!("CARGO_PKG_VERSION"), about=env!("CARGO_PKG_DESCRIPTION"), long_about=env!("CARGO_PKG_DESCRIPTION"))]
 pub struct Args {
     /// Input source file
-    #[arg(long, short)] 
     in_file: String,
 
     /// Output compiled file
     #[arg(long, short, default_value_t=String::from(DEFAULT_OUT_FILE))]
     out_file: String,
-
-    /// Compile
-    #[arg(long, short)]
-    compile: bool,
 
     /// Interpert
     #[arg(long, short='s')]
@@ -78,7 +72,7 @@ impl Args {
             "0" | "" => Ok(1),
             o => {
                 error!("Unknown optimisation level {o}");
-                Err(eyre!(""))
+                bail!("")
             }
         }
     }
@@ -98,7 +92,7 @@ fn main() -> Result<()>{
 
     
     let mut parser = parser::Parser::new(tokens, &args, None);
-    let tokens = match parser.parse(){
+    let program = match parser.parse(){
         Ok(t) => t,
         Err(e) => {
             error!("Parsing failed, exiting!");
@@ -109,7 +103,7 @@ fn main() -> Result<()>{
         }
     };
 
-    match typechecker::typecheck(tokens.clone(), &args, None, HashMap::new(), HashMap::new()) {
+    match typechecker::typecheck(program.ops.clone(), &args, None, HashMap::new(), HashMap::new()) {
         Ok(_) => (),
         Err(e) => {
             error!("Typechecking failed, exiting!");
@@ -120,22 +114,14 @@ fn main() -> Result<()>{
         }
     };
 
-    let c = if args.compile && args.interpret {
-        error!("Cannot compile and interpret at the same time");
-        0
-    } else if args.interpret {
-        if let Ok(c) = interpret::linux_x86_64::run(&tokens) { c } else {
-            error!("Interpretation failed, exiting!");
-            1
-        }
-    } else if args.compile {
-        if let Ok(c) = compile::linux_x86_64::compile(&tokens, &args) { c } else {
+    let c =match compile::linux_x86_64::compile(&program, &args) {
+        Ok(c) => c,
+        Err(e) => {
             error!("Compilation failed, exiting!");
+            println!("{e}");
             1
         }
-    } else {
-        error!("Did not choose to compile or to interpret, exiting");
-        0
     };
+
     std::process::exit(c);
 }

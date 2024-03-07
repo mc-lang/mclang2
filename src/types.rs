@@ -1,3 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
+use eyre::bail;
+
 
 
 
@@ -90,13 +94,18 @@ pub enum KeywordType {
     FunctionDone,
     Inline,
     Export,
-    Struct
+    Struct,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum InternalType {
+    Arrow
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpType {
     Keyword(KeywordType),
-    Instruction(InstructionType)
+    Instruction(InstructionType),
+    Internal(InternalType)
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +226,7 @@ impl OpType {
                     KeywordType::Struct => "struct",
                 }
             }
+            OpType::Internal(t) => panic!("{t:?}"),
             
         }.to_string()
     }
@@ -269,15 +279,114 @@ pub type Loc = (String, usize, usize);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Types {
+    Any,
     Bool,
     Ptr,
-    Int,
     Void,
-    Any
-    // U8,
-    // U16,
-    // U32,
-    // U64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    Custom{
+        size: u64 // in bytes
+    },
     // todo: add signed numbers since we dont have them yet lol
 }
 
+impl Types {
+    pub fn get_size(&self) -> u64 {
+        match *self {
+            Types::Any => 0, // any cant be a known size
+            Types::Void => 0,
+            Types::Bool => 1,
+            Types::U8 |
+            Types::I8 => 1,
+            Types::U16 |
+            Types::I16 => 2,
+            Types::U32 |
+            Types::I32 => 4,
+            Types::Ptr |
+            Types::U64 |
+            Types::I64 => 8,
+            Types::Custom { size } => size,
+        }
+    }
+}
+
+impl TryInto<Types> for &str {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_into(self) -> Result<Types, Self::Error> {
+        match self {
+            "Any" => Ok(Types::Any),
+            "Void" => Ok(Types::Void),
+            "Bool" => Ok(Types::Bool),
+            "U8" => Ok(Types::U8),
+            "I8" => Ok(Types::I8),
+            "U16" => Ok(Types::U16),
+            "I16" => Ok(Types::I16),
+            "U32" => Ok(Types::U32),
+            "I32" => Ok(Types::I32),
+            "Ptr" => Ok(Types::Ptr),
+            "U64" => Ok(Types::U64),
+            "I64" => Ok(Types::I64),
+            _ => bail!("Unknown type {self}")
+        }
+    }
+}
+
+impl TryInto<Types> for String {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_into(self) -> Result<Types, Self::Error> {
+        self.into()
+    }
+}
+
+
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub loc: Loc,
+    pub name: String,
+    pub inline: bool,
+    pub tokens: Option<Vec<Operator>>
+}
+
+#[derive(Debug, Clone)]
+pub struct Constant {
+    pub loc: Loc,
+    pub name: String
+}
+
+#[derive(Debug, Clone)]
+pub struct Memory {
+    pub loc: Loc,
+    pub id: usize
+    
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDef {
+    pub loc: Loc,
+    pub name: String,
+    pub fields: HashSet<(String, Types)>
+}
+
+pub type Functions = HashMap<String, Function>;
+pub type Memories = HashMap<String, Memory>;
+pub type Constants = HashMap<String, Constant>;
+pub type StructDefs = HashMap<String, StructDef>;
+
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub ops: Vec<Operator>,
+    pub functions: Functions,
+    pub memories: Memories,
+    pub constants: Constants,
+    pub struct_defs: StructDefs
+}

@@ -1,7 +1,7 @@
 use std::path::{PathBuf, Path};
 use std::process::{Command, Stdio};
-use color_eyre::Result;
-use crate::info;
+use anyhow::Result;
+use crate::{info, error};
 
 pub fn linux_x86_64_compile_and_link(of_a: &Path, of_o: &Path, of_c: &Path, quiet: bool) -> Result<()> {
     
@@ -22,11 +22,16 @@ pub fn linux_x86_64_compile_and_link(of_a: &Path, of_o: &Path, of_c: &Path, quie
     let mut proc = if cfg!(target_os = "windows") {
         return Ok(());
     } else {
-        Command::new("nasm")
+        let ret = Command::new("nasm")
                 .args(nasm_args)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
-                .spawn()?
+                .spawn();
+
+        if ret.is_err() {
+            error!("Nasm not installed")
+        }
+        ret?
     };
     if !quiet { 
         info!("running 'nasm {}'", nasm_args.join(" "));

@@ -1,0 +1,5 @@
+
+
+fn cstr_len with ptr returns int then
+    dup while dup load8 '\0' != do 1 + end swap -
+done

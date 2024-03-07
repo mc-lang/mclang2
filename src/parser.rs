@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
-use crate::{constants::{Operator, OpType, Token, TokenType, Loc, KeywordType, InstructionType}, lerror, preprocessor::Preprocessor, Args};
-use color_eyre::Result;
-use eyre::eyre;
+use crate::{definitions::{Operator, OpType, Token, TokenType, Loc, KeywordType, InstructionType, InternalType, Program}, lerror, preprocessor::Preprocessor, Args};
+use anyhow::{Result, bail};
 
 pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
     let mut stack: Vec<usize> = Vec::new();
@@ -18,11 +17,11 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
             OpType::Keyword(KeywordType::Else) => {
                 let Some(if_ip) = stack.pop() else {
                     lerror!(&op.loc, "Unclosed-if else block");
-                    return Err(eyre!("Cross referencing"));
+                    bail!("Cross referencing")
                 };
                 if program[if_ip].typ != OpType::Keyword(KeywordType::If) {
                     lerror!(&op.clone().loc,"'else' can only close 'if' blocks");
-                    return Err(eyre!("Bad block"));
+                    bail!("Bad block")
                 }
                 
                 program[if_ip].jmp = ip + 1;
@@ -31,7 +30,7 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
             OpType::Keyword(KeywordType::End) => {
                 let Some(block_ip) = stack.pop() else {
                     lerror!(&op.loc, "Unclosed if, if-else, while-do, function, memory, or constant");
-                    return Err(eyre!("Cross referencing"));
+                    bail!("Cross referencing")
                 };
 
                 match &program[block_ip].typ {
@@ -50,7 +49,7 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
                     a => {
                         println!("{a:?}");
                         lerror!(&op.clone().loc,"'end' can only close if, if-else, while-do, function, memory, or constant blocks");
-                        return  Err(eyre!(""));
+                        bail!("")
                     }
                 }
 
@@ -58,7 +57,7 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
             OpType::Keyword(KeywordType::Do) => {
                 let Some(block_ip) = stack.pop() else {
                     lerror!(&op.loc, "Unclosed while-do block");
-                    return Err(eyre!("Cross referencing"));
+                    bail!("Cross referencing")
                 };
 
                 program[ip].jmp = block_ip;
@@ -72,7 +71,7 @@ pub fn cross_ref(mut program: Vec<Operator>) -> Result<Vec<Operator>> {
         // println!("{:?}", stack);
         let i = stack.pop().expect("Empy stack");
         lerror!(&program[i].clone().loc,"Unclosed block, {:?}", program[i].clone());
-        return Err(eyre!("Unclosed block"));
+        bail!("Unclosed block")
     }
 
     Ok(program.clone())
@@ -98,7 +97,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Operator>> {
+    pub fn parse(&mut self) -> Result<Program> {
         let mut tokens = Vec::new();
 
         for token in &self.tokens {
@@ -129,7 +128,7 @@ impl<'a> Parser<'a> {
                     let c = token.text.clone();
                     if c.len() != 1 {
                         lerror!(&token.loc(), "Chars can only be of lenght 1, got {}", c.len());
-                        return Err(eyre!(""));
+                        bail!("")
                     }
 
                     tokens.push(Operator::new(OpType::Instruction(InstructionType::PushInt), token.typ, token.text.chars().next().unwrap() as usize, String::new(), token.file.clone(), token.line, token.col));
@@ -138,9 +137,9 @@ impl<'a> Parser<'a> {
 
 
         }
-        self.preprocessor.program = tokens;
-        let t = self.preprocessor.preprocess()?.get_ops();
-        let t = cross_ref(t)?;
+        self.preprocessor.program.ops = tokens;
+        let mut t = self.preprocessor.preprocess()?.get_program();
+        t.ops = cross_ref(t.ops)?;
 
         Ok(t)
     }
@@ -180,12 +179,12 @@ pub fn lookup_word<P: Deref<Target = Loc>>(s: &str, _pos: P) -> OpType {
         
         
         // mem
-        "load8" => OpType::Instruction(InstructionType::Load8),
-        "store8" => OpType::Instruction(InstructionType::Store8),
-        "load32" => OpType::Instruction(InstructionType::Load32),
-        "store32" => OpType::Instruction(InstructionType::Store32),
-        "load64" => OpType::Instruction(InstructionType::Load64),
-        "store64" => OpType::Instruction(InstructionType::Store64),
+        "read8" => OpType::Instruction(InstructionType::Read8),
+        "write8" => OpType::Instruction(InstructionType::Write8),
+        "read32" => OpType::Instruction(InstructionType::Read32),
+        "write32" => OpType::Instruction(InstructionType::Write32),
+        "read64" => OpType::Instruction(InstructionType::Read64),
+        "write64" => OpType::Instruction(InstructionType::Write64),
         
         "syscall0" => OpType::Instruction(InstructionType::Syscall0),
         "syscall1" => OpType::Instruction(InstructionType::Syscall1),
@@ -212,6 +211,7 @@ pub fn lookup_word<P: Deref<Target = Loc>>(s: &str, _pos: P) -> OpType {
         "done" => OpType::Keyword(KeywordType::FunctionDone),
         "inline" => OpType::Keyword(KeywordType::Inline),
         "export" => OpType::Keyword(KeywordType::Export),
+        "struct" => OpType::Keyword(KeywordType::Struct),
         "return" => OpType::Instruction(InstructionType::Return),
         "returns" => OpType::Instruction(InstructionType::Returns),
         "bool" => OpType::Instruction(InstructionType::TypeBool),
@@ -220,6 +220,9 @@ pub fn lookup_word<P: Deref<Target = Loc>>(s: &str, _pos: P) -> OpType {
         "void" => OpType::Instruction(InstructionType::TypeVoid),
         "any" => OpType::Instruction(InstructionType::TypeAny),
         "with" => OpType::Instruction(InstructionType::With),
+        
+        "->" => OpType::Internal(InternalType::Arrow),
+
         _ => OpType::Instruction(InstructionType::None)
     }
 

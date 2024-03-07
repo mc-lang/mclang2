@@ -32,7 +32,7 @@ pub mod logger {
     #![allow(dead_code)]
     use std::ops::Deref;
 
-    use crate::{util::color, constants::Loc};
+    use crate::{util::color, definitions::Loc};
 
     pub fn error(msg: &str) {
         println!("{red}error{r}: {msg}", red=color::FG_RED, r=color::RESET);

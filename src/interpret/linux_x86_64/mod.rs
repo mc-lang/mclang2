@@ -126,9 +126,9 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                         ip += 1;
                     },
                     #[allow(clippy::cast_possible_truncation)]
-                    InstructionType::Load8 |
-                    InstructionType::Load32 |
-                    InstructionType::Load64 => {
+                    InstructionType::Read8 |
+                    InstructionType::Read32 |
+                    InstructionType::Read64 => {
                         let a = stack_pop(&mut stack, &pos)?;
                         if a > crate::MEM_SZ + crate::STRING_SZ {
                             lerror!(&op.loc, "Invalid memory address {a}");
@@ -139,7 +139,7 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                         ip += 1;
                     }
                     #[allow(clippy::cast_possible_truncation)]
-                    InstructionType::Store8 => {
+                    InstructionType::Write8 => {
                         let val = stack_pop(&mut stack, &pos)?;
                         let addr = stack_pop(&mut stack, &pos)?;
                         
@@ -152,7 +152,7 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                         ip += 1;
                     }
                     #[allow(clippy::cast_possible_truncation)]
-                    InstructionType::Store32 => {
+                    InstructionType::Write32 => {
                         let val = stack_pop(&mut stack, &pos)?;
                         let addr = stack_pop(&mut stack, &pos)?;
                         
@@ -166,7 +166,7 @@ pub fn run(ops: &[crate::constants::Operator]) -> Result<i32>{
                     }
 
                     #[allow(clippy::cast_possible_truncation)]
-                    InstructionType::Store64 => {
+                    InstructionType::Write64 => {
                         let val = stack_pop(&mut stack, &pos)?;
                         let addr = stack_pop(&mut stack, &pos)?;
                         

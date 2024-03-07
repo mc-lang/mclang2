@@ -3,8 +3,7 @@ use std::path::{PathBuf, Path};
 use std::process::Stdio;
 use std::{process, fs};
 use clap::Parser;
-use color_eyre::Result;
-use eyre::eyre;
+use anyhow::{Result, bail};
 
 pub mod color {
     #![allow(dead_code)]
@@ -104,21 +103,21 @@ fn compare_results(intp: &TestOutput, comp: &TestOutput, f_in: &Path) -> Result<
         println!("{b}[ {r}ERR{rs}{b} ]{rs} {f} compiled and interpreted stdout versions differ", r=color::FG_RED, rs=color::RESET, b=color::BRIGHT, f=f_in.display());
         println!("compiled:\n{}", comp.stdout);
         println!("interpreted:\n{}", intp.stdout);
-        return Err(eyre!("Testing failed"));
+        bail!("Testing failed");
     }
 
     if intp.stderr != comp.stderr {
         println!("{b}[ {r}ERR{rs}{b} ]{rs} {f} compiled and interpreted stderr versions differ", r=color::FG_RED, rs=color::RESET, b=color::BRIGHT, f=f_in.display());
         println!("compiled:\n{}", comp.stderr);
         println!("interpreted:\n{}", intp.stderr);
-        return Err(eyre!("Testing failed"));
+        bail!("Testing failed");
     }
 
     if intp.status != comp.status {
         println!("{b}[ {r}ERR{rs}{b} ]{rs} {f} compiled and interpreted status codes differ", r=color::FG_RED, rs=color::RESET, b=color::BRIGHT, f=f_in.display());
         println!("compiled:\n{}", comp.status);
         println!("interpreted:\n{}", intp.status);
-        return Err(eyre!("Testing failed"));
+        bail!("Testing failed");
     }
 
     println!("{b}[ {g}OK{rs}{b} ]{rs} {f} ", g=color::FG_GREEN, rs=color::RESET, b=color::BRIGHT, f=f_in.display());
@@ -164,7 +163,7 @@ fn main() -> Result<()> {
         "record" => todo!("Implement test result recording"),
         s => {
             eprintln!("Unknown mode '{s}'");
-            return Err(eyre!("Bad subcommand"));
+            bail!("Bad subcommand");
         }
     }?;
 

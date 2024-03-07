@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{constants::{Operator, Types, OpType, KeywordType, InstructionType, Loc}, Args, lerror, warn};
-use color_eyre::Result;
-use eyre::eyre;
+use crate::{definitions::{Operator, Types, OpType, KeywordType, InstructionType, Loc}, Args, lerror, warn};
+use anyhow::{Result, bail};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -69,12 +68,12 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                         if let Some(p) = rtokens.pop() {
                             if p.typ != OpType::Instruction(InstructionType::With){
                                 lerror!(&op.loc, "Expected {:?}, got {:?}", OpType::Instruction(InstructionType::With), p.typ);
-                                return Err(eyre!(""));
+                                bail!("");
                             }
 
                         } else {
                             lerror!(&op.loc, "Expected {:?}, got nothing", OpType::Instruction(InstructionType::With));
-                            return Err(eyre!(""));
+                            bail!("");
                         }
                         
                         let mut p = rtokens.pop();
@@ -92,7 +91,7 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                                 op.typ == OpType::Instruction(InstructionType::TypeAny) ||
                                 op.typ == OpType::Instruction(InstructionType::TypeVoid) {
                                     let t = if op.typ == OpType::Instruction(InstructionType::TypeInt) {
-                                        Types::Int
+                                        Types::U64
                                     } else if op.typ == OpType::Instruction(InstructionType::TypeBool) {
                                         Types::Bool
                                     } else if op.typ == OpType::Instruction(InstructionType::TypePtr) {
@@ -153,7 +152,7 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                         let (ret_typs, _, _) = typecheck(code, args, Some(ts.clone()), functions.clone(), constants.clone())?;
                         if ret_typs != func.returns && !func.returns.contains(&Types::Void){
                             lerror!(&func.loc, "Expected {:?}, but got {:?}", func.returns, ret_typs);
-                            return Err(eyre!(""))
+                            bail!("");
                         }
 
                         if !func.args.contains(&Types::Void) {
@@ -170,7 +169,7 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                     KeywordType::Memory => (),
                     KeywordType::ConstantDef => {
                         // println!("defined constant");
-                        constants.insert(op.text, Constant { loc: op.loc.clone(), types: vec![Types::Int] });
+                        constants.insert(op.text, Constant { loc: op.loc.clone(), types: vec![Types::U64] });
                         
                     },
                     KeywordType::FunctionThen |
@@ -181,26 +180,27 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                         println!("{:?}", op);
                         unreachable!()
                     },
+                    KeywordType::Struct => todo!(),
                 }
             },
             OpType::Instruction(instruction) => {
                 match instruction {
                     InstructionType::PushInt => {
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::PushStr => {
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                         stack.push(Types::Ptr);
                     },
                     InstructionType::PushCStr => {
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                         stack.push(Types::Ptr);
                     },
                     InstructionType::Drop => {
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                     },
                     InstructionType::Print => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                     },
                     InstructionType::Dup => {
                         let a = stack_pop(&mut stack, &op, &[Types::Any])?;
@@ -234,9 +234,9 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                     InstructionType::Shr |
                     InstructionType::Shl |
                     InstructionType::Mul => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack.push(Types::Int);
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack.push(Types::U64);
                     },
                     InstructionType::Equals |
                     InstructionType::Gt |
@@ -244,76 +244,76 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                     InstructionType::Ge |
                     InstructionType::Le |
                     InstructionType::NotEquals => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack.push(Types::Bool);
                     },
                     InstructionType::DivMod => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack.push(Types::Int);
-                        stack.push(Types::Int);
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack.push(Types::U64);
+                        stack.push(Types::U64);
                     },
-                    InstructionType::Load8 |
-                    InstructionType::Load32 |
-                    InstructionType::Load64 => {
+                    InstructionType::Read8 |
+                    InstructionType::Read32 |
+                    InstructionType::Read64 => {
                         stack_pop(&mut stack, &op, &[Types::Ptr])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
-                    InstructionType::Store8 |
-                    InstructionType::Store32 |
-                    InstructionType::Store64 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                    InstructionType::Write8 |
+                    InstructionType::Write32 |
+                    InstructionType::Write64 => {
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Ptr])?;
                     },
                     InstructionType::Syscall0 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
-                        stack.push(Types::Int);
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall1 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall2 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall3 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall4 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall5 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::Syscall6 => {
-                        stack_pop(&mut stack, &op, &[Types::Int])?;
+                        stack_pop(&mut stack, &op, &[Types::U64])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::CastBool => {
                         stack_pop(&mut stack, &op, &[Types::Any])?;
@@ -325,7 +325,7 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                     },
                     InstructionType::CastInt => {
                         stack_pop(&mut stack, &op, &[Types::Any])?;
-                        stack.push(Types::Int);
+                        stack.push(Types::U64);
                     },
                     InstructionType::CastVoid => {
                         stack_pop(&mut stack, &op, &[Types::Any])?;
@@ -339,7 +339,7 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                         
                         let f = if let Some(f) = functions.get(&op.text) {f} else {
                             lerror!(&op.loc, "Could not find function {}", op.text);
-                            return Err(eyre!(""));
+                            bail!("");
                         };
 
                         // in_function = (op.text.clone(), f.clone(), op.loc.clone());
@@ -353,11 +353,11 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                             if let Some(s2) = s.pop(){
                                 if t != s2 {
                                     lerror!(&op.loc, "Expected {:?}, but got {:?}", t, s2);
-                                    return Err(eyre!(""));
+                                    bail!("");
                                 }
                             } else {
                                 lerror!(&op.loc, "Expected {:?}, but got nothing", t);
-                                return Err(eyre!(""));
+                                bail!("");
                             }
                         }
 
@@ -377,8 +377,10 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
                         let mut c = constants.get(&op.text).unwrap().clone();
                         stack.append(&mut c.types);
                     },
+                    InstructionType::StructUse => todo!(),
                 }
             },
+            OpType::Internal(t) => panic!("{t:?}"),
             
         }
 
@@ -393,13 +395,13 @@ pub fn typecheck(ops: Vec<Operator>, args: &Args, init_types: Option<Vec<Types>>
 fn stack_pop(v: &mut Vec<Types>, op: &Operator, t: &[Types]) -> Result<Types> {
     if v.is_empty() {
         lerror!(&op.loc, "Expected {:?}, but got nothing", t);
-        return Err(eyre!(""));
+        bail!("");
     }
     let r = v.pop().unwrap();
 
     if !t.contains(&r) && t[0] != Types::Any {
         lerror!(&op.loc, "Expected {:?}, but got {:?}", t, r);
-        return Err(eyre!(""));
+        bail!("");
     }
 
     Ok(r)

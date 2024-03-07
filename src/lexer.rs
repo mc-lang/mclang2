@@ -1,5 +1,5 @@
 
-use crate::{constants::{Token, TokenType}, Args};
+use crate::{definitions::{Token, TokenType}, Args};
 
 fn lex_word(s: String, tok_type: TokenType) -> (TokenType, String) {
     match s {
@@ -131,7 +131,7 @@ pub fn lex(code: &str, file: &str, _args: &Args) -> Vec<Token> {
                 typ: tok_type,
                 value: None,
                 addr: None,
-                op_typ: crate::constants::OpType::Instruction(crate::constants::InstructionType::None)
+                op_typ: crate::definitions::OpType::Instruction(crate::definitions::InstructionType::None)
             };
             tokens.push(t);
         }

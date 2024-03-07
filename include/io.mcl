@@ -49,7 +49,7 @@ inline fn eputs with int ptr returns void then
     STDOUT fwrite drop
 done
 
-// TODO: make putc and eputc after we make local mem
+// TODO: make putc, eputc, putd, and eputd  after we make local mem
 
 // Exit the program with exit_code
 // args: [exit_code]

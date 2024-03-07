@@ -1,7 +1,13 @@
 include "std.mcl"
 
+
 fn main with int ptr returns void then
     // p l 
-    c"bad, wait no, good\n\0" dup cstr_len swap puts
+    "Hello!\n" puts
 
+    // memory fd 4 end
+
+    // c"./test.mcl" FS_O_SYNC 0 fopen 
+    // dup _dbg_print
+    // fd swap write32
 done

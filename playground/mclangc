@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+
+#? This is just a passthrough for the compiled mclangc binary for ease of use
+#? It also compiles mclangc every time its ran
+
+pushd ../ > /dev/null
+
+cargo build --release -q
+
+popd > /dev/null
+
+
+../target/release/mclangc -I../include ${@:1}

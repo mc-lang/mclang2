@@ -1,13 +1,12 @@
 
-use color_eyre::Result;
-use eyre::eyre;
+use anyhow::{Result, bail};
 
-use crate::{constants::{ OpType, InstructionType, Loc, Operator}, lerror};
+use crate::{definitions::{ OpType, InstructionType, Loc, Operator}, lerror};
 
 fn stack_pop(stack: &mut Vec<usize>, loc: &Loc) -> Result<usize> {
     if let Some(i) = stack.pop() { Ok(i) } else {
         lerror!(&loc.clone(), "Stack underflow");
-        Err(eyre!("Stack underflow"))
+        bail!("Stack underflow")
     }
 }
 
@@ -131,15 +130,16 @@ pub fn precompile(tokens: &Vec<Operator>) -> Result<Vec<usize>>{
                     _ => {
                         lerror!(&token.loc, "Unsupported precompiler instruction {:?}", i);
                         dbg!(tokens);
-                        return Err(eyre!(""));
+                        bail!("");
                     }
                 }
             }
             OpType::Keyword(_) => {
                 lerror!(&token.loc, "Unsupported precompiler keyword {:?}", token.typ);
                 dbg!(tokens);
-                return Err(eyre!(""));
+                bail!("");
             }
+            OpType::Internal(t) => panic!("{t:?}"),
         }
     }
     

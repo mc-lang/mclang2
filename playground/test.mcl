@@ -1,0 +1,35 @@
+include "std.mcl"
+
+
+struct StatDef do
+    val -> u32
+    val2 -> i8
+end
+
+alloc Stat StatDef end
+
+fn main with int ptr returns void then
+    // p l 
+    "Hello!\n" puts
+
+    Stat.val 69 write32
+
+    Stat.val read32 _dbg_print
+    Stat.__size  read32 _dbg_print
+
+    // memory fd 4 end
+
+    // NULL
+    // FS_O_RDWR
+    // c"/home/mcorange/@Projects/rust/programming_languages/mclang/mclangc/playground/test.mcl"
+    // fopen
+    // dup _dbg_print
+    // fd swap write32
+
+
+
+    
+
+
+
+done

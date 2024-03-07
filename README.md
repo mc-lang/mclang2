@@ -22,6 +22,8 @@ You can find the docs [here](/docs/index.md)
 
 Usefull things that i search for a lot in the sourcecode so i added them here
 
+add them in reverse order in mclang
+
 Syscall arg order: \[rax ,rdi ,rsi ,rdx ,r10 ,r8 ,r9\]
 
 ## Credits
