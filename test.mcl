@@ -16,24 +16,24 @@ include "std.mcl"
 // fn putd with int returns void then drop done
 
 fn main with int ptr returns int then
-    // 1 2 add
-    // 69 _dbg_print
+    1 2 add
+    69 _dbg_print
     "Hewo\n" puts
 
-    // if 3 4 eq do
-    //     "omg what impossible!\n"
-    // else if 1 1 eq do
-    //     "whaaaaaaaaa\n"
-    // else
-    //     "finally, some good soup\n"
-    // done
-    // puts
+    if 3 4 eq do
+        "omg what impossible!\n"
+    else if 1 1 eq do
+        "whaaaaaaaaa\n"
+    else
+        "finally, some good soup\n"
+    done
+    puts
 
-    // 10 
-    // while dup 0 gt do
-    //     "uwu" puts
-    //     dup _dbg_print
-    //     1 sub
-    // done
+    10 
+    while dup 0 gt do
+        "uwu " puts
+        dup _dbg_print
+        1 sub
+    done
 
 done

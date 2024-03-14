@@ -4,7 +4,7 @@ mod utils;
 use anyhow::bail;
 
 use crate::{cli::{CliArgs, CompilationTarget}, types::ast::Program};
-use std::{collections::HashMap, fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}};
+use std::{collections::HashMap, fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}, process::Command};
 
 use self::utils::run_cmd;
 
@@ -49,7 +49,28 @@ pub fn compile_program(cli_args: &CliArgs, prog_map: HashMap<&Path, Program>) ->
     info!("Finished building program");
 
     if cli_args.run {
-        run_cmd(format!("./{}", bin_p.to_string_lossy()), cli_args.passthrough.clone())?;
+        // run_cmd(format!("./{}", bin_p.to_string_lossy()), cli_args.passthrough.clone())?;
+        let bin = bin_p.to_string_lossy().to_string();
+        let mut cmd = Command::new(format!("./{}", bin.clone()));
+        let cmd = cmd.args(cli_args.passthrough.clone());
+        
+        let child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Unable to run {cmd:?}: {e}");
+                bail!("");
+            }
+        };
+        let ret = child.wait_with_output().expect("fuck i know");
+
+
+        if !ret.status.success() {
+            error!("Process running {bin:?} exited abnormaly, run with -v 2 for more output");
+            bail!("")
+        } else {
+            info!("Process exited successfully")
+        }
+
     }
 
 
