@@ -135,6 +135,7 @@ pub struct Constant {
 pub struct Memory {
     pub loc: Loc,
     pub ident: String,
+    pub statc: bool,
     pub size: usize // bytes
 }
 
@@ -145,4 +146,28 @@ pub struct Program {
     pub functions: HashMap<String, Function>,
     pub constants: HashMap<String, Constant>,
     pub memories: HashMap<String, Memory>,
+}
+
+impl EscIdent for Constant {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+}
+impl EscIdent for Memory {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+}
+impl EscIdent for Function {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+}
+
+pub trait EscIdent {
+    fn ident(&self) -> String;
+    fn get_ident_escaped(&self) -> String {
+        self.ident().replace("(", "_OPRN_")
+            .replace(")", "_CPRN_")
+    }
 }

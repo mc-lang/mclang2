@@ -3,7 +3,23 @@ use anyhow::bail;
 use crate::types::{ast::{AstNode, Program}, common::Loc, token::{InstructionType, TokenType}};
 
 
-pub fn precompile(prog: &Program, ast: Vec<AstNode>, stack: &mut Vec<usize> ) -> anyhow::Result<AstNode> {
+pub fn precompile_mem(prog: &Program, ast: Vec<AstNode> ) -> anyhow::Result<usize> {
+    match precompile_const(prog, ast, &mut Vec::new()) {
+        Ok(v) => {
+            match v {
+                AstNode::Int(_, i) => {
+                    return Ok(i)
+                }
+                _ => {
+                    error!("memories can only have numbers or types in their size");
+                    bail!("")
+                }
+            }
+        },
+        Err(e) => bail!(e),
+    }
+}
+pub fn precompile_const(prog: &Program, ast: Vec<AstNode>, stack: &mut Vec<usize> ) -> anyhow::Result<AstNode> {
     for node in ast.clone() {
         match &node {
             AstNode::ConstUse(c) => {

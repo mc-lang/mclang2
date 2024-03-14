@@ -5,7 +5,7 @@ include "std.mcl"
 //     baz do sizeof(u64) end
 // done
 
-// memory s_foo Foo end
+memory s_foo sizeof(u32) end
 
 //? Comments :3
 

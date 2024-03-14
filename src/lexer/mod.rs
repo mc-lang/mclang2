@@ -157,9 +157,11 @@ impl Lexer {
                 }
 
                 '/' if chars.get(idx + 1) == Some(&'/') => {
-                    while chars.get(idx) != Some(&'\n') {
+                    let mut c = chars.get(idx);
+                    while c.is_some() && c != Some(&'\n') {
                         self.loc.inc_col();
                         idx += 1;
+                        c = chars.get(idx);
                     }
                     self.loc.inc_line();
                 }

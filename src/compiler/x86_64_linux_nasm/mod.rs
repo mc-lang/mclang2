@@ -14,6 +14,7 @@ use super::Compiler;
 
 pub struct X86_64LinuxNasmCompiler {
     strings: Vec<String>,
+    func_mem_i: Vec<usize>,
     if_i: usize,
     while_i: usize,
     used_consts: Vec<String>
@@ -354,8 +355,14 @@ impl X86_64LinuxNasmCompiler {
                     writeln!(fd, "; WHILE({id}) END")?;
                 },
                 AstNode::Module(m) => self.handle_module(fd, prog, m)?,
-                AstNode::Memory(_) => todo!(),
-                AstNode::MemUse(_) => todo!(),
+                AstNode::Memory(m) => {
+                    if !m.statc {
+                        todo!()
+                    }
+                },
+                AstNode::MemUse(_) => {
+                    
+                },
                 AstNode::ConstUse(c) => {
                     self.used_consts.push(c.ident.clone());
                     writeln!(fd, "    mov rax, qword [c_{}]", c.ident)?;

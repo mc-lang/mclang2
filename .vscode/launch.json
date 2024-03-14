@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'mclangc-v2'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=mclangc-v2",
+                    "--package=mclangc-v2"
+                ],
+                "filter": {
+                    "name": "mclangc-v2",
+                    "kind": "bin"
+                }
+            },
+            "args": ["-o", "test", "test.mcl", "-r"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'mclangc-v2'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=mclangc-v2",
+                    "--package=mclangc-v2"
+                ],
+                "filter": {
+                    "name": "mclangc-v2",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

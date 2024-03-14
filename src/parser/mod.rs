@@ -6,9 +6,9 @@ use std::{collections::HashMap, path::Path};
 
 use anyhow::{bail, Result};
 
-use crate::{cli::CliArgs, lexer::Lexer, types::{ast::{AstNode, Block, ConstUse, Constant, FnCall, Function, If, MemUse, Module, Program, While}, common::Loc, token::{InstructionType, KeywordType, Token, TokenType}}};
+use crate::{cli::CliArgs, lexer::Lexer, types::{ast::{AstNode, Block, ConstUse, Constant, FnCall, Function, If, MemUse, Memory, Module, Program, While}, common::Loc, token::{InstructionType, KeywordType, Token, TokenType}}};
 
-use self::{builtin::get_builtin_symbols, precompiler::precompile, utils::{expect, peek_check, peek_check_multiple, PeekResult}};
+use self::{builtin::get_builtin_symbols, precompiler::{precompile_const, precompile_mem}, utils::{expect, peek_check, peek_check_multiple, PeekResult}};
 
 
 bitflags::bitflags! {
@@ -69,8 +69,8 @@ fn parse_next(cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, f
             match kw {
                 KeywordType::If       => parse_if(&token, cli_args, prog, tokens)?,
                 KeywordType::While    => parse_while(&token, cli_args, prog, tokens)?,
-                KeywordType::Include  => parse_include(&token, cli_args, prog, tokens)?, //TODO: implement include
-                KeywordType::Memory   => todo!(),
+                KeywordType::Include  => parse_include(&token, cli_args, prog, tokens)?,
+                KeywordType::Memory   => parse_memory(&token, cli_args, prog, tokens, is_module_root)?,
                 KeywordType::Constant => parse_const(&token, cli_args, prog, tokens)?,
                 KeywordType::Function => parse_function(&token, cli_args, prog, tokens, flags)?,
                 KeywordType::Struct   => todo!(),
@@ -103,6 +103,43 @@ fn parse_next(cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, f
         },
     };
     Ok(ret)
+}
+
+fn parse_memory(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, is_module_root: bool) -> Result<AstNode> {
+    let name = expect(tokens, TokenType::Unknown(String::new()))?;
+
+
+    let mut body = Vec::new();
+    loop {
+
+        let t = peek_check(tokens, TokenType::Keyword(KeywordType::End));
+        match t {
+            PeekResult::Correct(_) => break,
+            PeekResult::Wrong(_) => (),
+            PeekResult::None => panic!("idk what to do herre"),
+        }
+        body.push(parse_next(cli_args, prog, tokens, Flags::empty(), false)?);
+    }
+    expect(tokens, TokenType::Keyword(KeywordType::End))?;
+
+    let val = precompile_mem(prog, body)?;
+
+    let name = name.lexem.clone()
+        .replace("(", "_OPRN_")
+        .replace(")", "_CPRN_");
+    
+    let def = Memory{
+        loc: org.loc(),
+        ident: name.clone(),
+        size: val,
+        statc: is_module_root,
+    };
+
+
+    prog.memories.insert(name, def.clone());
+
+    Ok(AstNode::Memory(def))
+
 }
 
 // TODO: Extern functions
@@ -509,20 +546,17 @@ fn parse_const(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut
     }
     expect(tokens, TokenType::Keyword(KeywordType::End))?;
 
-    let val = precompile(prog, body, &mut Vec::new())?;
+    let val = precompile_const(prog, body, &mut Vec::new())?;
 
-    let name = name.lexem.clone()
-        .replace("(", "_OPRN_")
-        .replace(")", "_CPRN_");
     
     let def = Constant{
         loc: org.loc(),
-        ident: name.clone(),
+        ident: name.lexem.clone(),
         value: Box::new(val),
     };
 
 
-    prog.constants.insert(name, def.clone());
+    prog.constants.insert(name.lexem, def.clone());
 
     Ok(AstNode::Constant(def))
 }

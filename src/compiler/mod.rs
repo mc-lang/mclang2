@@ -6,7 +6,6 @@ use anyhow::bail;
 use crate::{cli::{CliArgs, CompilationTarget}, types::ast::Program};
 use std::{collections::HashMap, fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}, process::Command};
 
-use self::utils::run_cmd;
 
 
 pub trait Compiler {
