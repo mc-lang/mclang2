@@ -1,0 +1,8 @@
+/target
+/*
+!/.gitignore
+!/src
+!/include
+!/Cargo*
+!/REF.md
+!/*.mcl
