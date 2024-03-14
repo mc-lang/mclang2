@@ -1,5 +1,6 @@
 use clap::{builder::PossibleValue, Parser, ValueEnum};
 use camino::Utf8PathBuf;
+
 lazy_static::lazy_static! {
     static ref DEFAULT_INCLUDE_PATHS: Vec<Utf8PathBuf> = vec![
         Utf8PathBuf::from("./"),
@@ -40,11 +41,14 @@ pub struct CliArgs {
     pub target: CompilationTarget,
 
     /// Input code files
+    #[arg(required=true, num_args=1..)]
     pub input: Vec<Utf8PathBuf>,
     
     #[clap(skip)]
     pub passthrough: Vec<String>
 }
+
+
 
 impl CliArgs {
     pub fn parse_with_passthrough() -> Self {

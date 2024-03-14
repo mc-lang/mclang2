@@ -1,6 +1,7 @@
-/target
 /*
+!/.vscode
 !/.gitignore
+!/.gitkeep
 !/src
 !/include
 !/Cargo*

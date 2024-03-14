@@ -146,6 +146,7 @@ dependencies = [
  "bitflags",
  "camino",
  "clap",
+ "clap_derive",
  "lazy_static",
  "map-macro",
  "parse_int",

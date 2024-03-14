@@ -10,6 +10,7 @@ anyhow = "1.0.80"
 bitflags = "2.4.2"
 camino = "1.1.6"
 clap = { version = "4.5.2", features = ["derive"] }
+clap_derive = "4.5.0"
 lazy_static = "1.4.0"
 map-macro = "0.3.0"
 parse_int = "0.6.0"
