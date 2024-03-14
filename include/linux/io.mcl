@@ -1,0 +1,14 @@
+
+fn fwrite with int ptr int returns int then
+    SYS_write syscall3
+done
+
+
+
+fn puts with int ptr int returns int then
+    STDOUT fwrite drop
+done
+
+fn eputs with int ptr int returns int then
+    STDERR fwrite drop
+done
