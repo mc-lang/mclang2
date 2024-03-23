@@ -1,6 +1,9 @@
-/target
-/a
-
-test
-test.nasm
-test.o
+/*
+!/.vscode
+!/.gitignore
+!/.gitkeep
+!/src
+!/include
+!/Cargo*
+!/REF.md
+!/*.mcl

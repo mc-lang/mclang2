@@ -1,141 +1,47 @@
-#![allow(clippy::wildcard_imports)]
-#![allow(clippy::too_many_lines)]
-mod constants;
-mod interpret;
-mod util;
-mod compile;
-mod parser;
+
+use std::collections::HashMap;
+
+#[macro_use]
+mod logger;
+mod cli;
+mod types;
 mod lexer;
-mod preprocessor;
-mod typechecker;
-mod precompiler;
-mod config;
-mod errors;
-use config::*;
-use std::{fs, collections::HashMap};
+pub mod parser;
+mod compiler;
 
-use clap::Parser;
-use color_eyre::Result;
-use eyre::eyre;
+fn main() {
+    let cli_args = cli::CliArgs::parse_with_passthrough();
+    logger::Logger::init(&cli_args).expect("Failed to init logger");
 
-#[derive(Parser, Debug, Clone)]
-#[command(author, version, about, long_about = None)]
-pub struct Args {
-    /// Input source file
-    #[arg(long, short)] 
-    in_file: String,
+    let mut prog_map = HashMap::new();
+    for file in &cli_args.input {
+        let mut lexer = lexer::Lexer::new();
 
-    /// Output compiled file
-    #[arg(long, short, default_value_t=String::from(DEFAULT_OUT_FILE))]
-    out_file: String,
-
-    /// Compile
-    #[arg(long, short)]
-    compile: bool,
-
-    /// Interpert
-    #[arg(long, short='s')]
-    interpret: bool,
-
-    /// Run the compiled executable
-    #[arg(long, short)]
-    run: bool,
-
-    /// Dont print any output exept the actual running codes output
-    #[arg(long, short)]
-    quiet: bool,
-    
-    /// Add an include directory [default: ["./include", "~/.mclang/include"]]
-    #[arg(long, short='I')]
-    include: Vec<String>,
-
-    /// Unsafe mode, disables typechecking
-    #[arg(long="unsafe", default_value_t = false)]
-    unsaf: bool,
-    
-    /// Optimisation level, available levels: 'D': debug, '0': No optimisations
-    #[arg(long, short='O', default_value_t=String::from("0"))]
-    optimisation: String,
-
-    // disables the main function
-    #[arg(long="lib")]
-    lib_mode: bool
-    //#[arg(long, short='F')]
-    //features: Vec<String>,
-
-}
-
-impl Args {
-    /// Get optimisation level
-    /// 0 => no optimisations
-    /// 1 => slight optimisations, mostly size ones
-    /// # Errors
-    /// 
-    /// Throws when the opt level is not known
-    pub fn get_opt_level(&self) -> Result<usize>{
-        match self.optimisation.as_str() {
-            "D" | "d" => Ok(0),
-            "0" | "" => Ok(1),
-            o => {
-                error!("Unknown optimisation level {o}");
-                Err(eyre!(""))
-            }
+        info!("Lexing file {file:?}");
+        if let Err(_) = lexer.lex(file.as_std_path()) {
+            error!("Lexing failed, exiting");
+            return;
         }
+
+        // for t in &lexer.tokens {
+        //     info!({loc => t.loc.clone()}, "{:?}", t.typ);
+        // }
+        // dbg!(&lexer.tokens);
+
+        info!("Parsing file {file:?}");
+        let prog = match parser::parse(&cli_args, &mut lexer.tokens) {
+            Ok(r) => r,
+            Err(_) => {
+                error!("Parsing failed, exiting");
+                return;
+            }
+        };
+
+        prog_map.insert(file.as_std_path(), prog);
+
     }
-}
+    if let Err(_) = compiler::compile_program(&cli_args, prog_map) {
+        error!("Failed to compile program, exiting");
+    }
 
-fn main() -> Result<()>{
-
-
-    let args = Args::parse();
-
-    let Ok(code) = fs::read_to_string(&args.in_file) else {
-        error!("Failed to read file {}, exiting!", &args.in_file);
-        return Ok(());
-    };
-    
-    let tokens = lexer::lex(&code, args.in_file.as_str(), &args);
-
-    
-    let mut parser = parser::Parser::new(tokens, &args, None);
-    let tokens = match parser.parse(){
-        Ok(t) => t,
-        Err(e) => {
-            error!("Parsing failed, exiting!");
-            if crate::DEV_MODE {
-                return Err(e)
-            }
-            return Ok(());
-        }
-    };
-
-    match typechecker::typecheck(tokens.clone(), &args, None, HashMap::new(), HashMap::new()) {
-        Ok(_) => (),
-        Err(e) => {
-            error!("Typechecking failed, exiting!");
-            if crate::DEV_MODE {
-                return Err(e);
-            }
-            return Ok(());
-        }
-    };
-
-    let c = if args.compile && args.interpret {
-        error!("Cannot compile and interpret at the same time");
-        0
-    } else if args.interpret {
-        if let Ok(c) = interpret::linux_x86_64::run(&tokens) { c } else {
-            error!("Interpretation failed, exiting!");
-            1
-        }
-    } else if args.compile {
-        if let Ok(c) = compile::linux_x86_64::compile(&tokens, &args) { c } else {
-            error!("Compilation failed, exiting!");
-            1
-        }
-    } else {
-        error!("Did not choose to compile or to interpret, exiting");
-        0
-    };
-    std::process::exit(c);
 }

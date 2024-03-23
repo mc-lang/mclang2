@@ -2,9 +2,18 @@
 name = "mclangc"
 version = "0.1.0"
 edition = "2021"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.1.8", features = ["derive"] }
-color-eyre = "0.6.2"
-eyre = "0.6.8"
+anyhow = "1.0.80"
+bitflags = "2.4.2"
+camino = "1.1.6"
+clap = { version = "4.5.2", features = ["derive"] }
+clap_derive = "4.5.0"
+lazy_static = "1.4.0"
+map-macro = "0.3.0"
+parse_int = "0.6.0"
+# serde = { version = "1.0.197", features = ["derive"] }
+# regex = "1.10.3"
+snailquote = "0.3.1"

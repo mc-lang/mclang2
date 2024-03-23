@@ -1,6 +1,2 @@
-include "linux.mcl"
-include "io.mcl"
-include "util.mcl"
-include "int.mcl"
-include "fs.mcl"
-include "compat.mcl"
+include "linux/linux.mcl"
+include "types.mcl"

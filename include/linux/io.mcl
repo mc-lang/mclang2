@@ -1,0 +1,14 @@
+
+fn fwrite with u64 ptr u64 returns u64 then
+    SYS_write syscall3
+done
+
+
+
+fn puts with u64 ptr u64 returns u64 then
+    STDOUT fwrite drop
+done
+
+fn eputs with u64 ptr u64 returns u64 then
+    STDERR fwrite drop
+done

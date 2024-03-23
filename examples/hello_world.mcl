@@ -1,4 +1,0 @@
-include "std.mcl"
-
-"Henlo World! :3\n" puts
-
