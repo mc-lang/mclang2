@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{common::Loc, token::{Token, TokenType}};
+use super::{common::Loc, token::{Token, TypeType}};
 
 
 //TODO: Implement missing stuff
@@ -23,16 +23,22 @@ pub enum AstNode {
     //     ident: String,
     //     value: InstructionType
     // },
-    // Struct{
-    //     loc: Loc,
-    //     ident: String,
-    //     body: Vec<(String, usize)> // (field ident, size in bytes)
-    // },
     // StructDef{
     //     loc: Loc,
     //     extrn: bool,
     //     ident: String,
     //     body: Vec<(String, usize)> // (field ident, size in bytes)
+    // },
+    StructDef(StructDef),
+    StructDispPush{
+        loc: Loc,
+        disp: usize,
+        ident: String,
+    },
+    // StructItemPush{
+    //     loc: Loc,
+    //     disp: usize,
+    //     ident: String,
     // },
     If(If),
     While(While),
@@ -63,14 +69,25 @@ impl AstNode {
             AstNode::Str(loc, _) => loc.clone(),
             AstNode::CStr(loc, _) => loc.clone(),
             AstNode::Char(loc, _) => loc.clone(),
+            AstNode::StructDef(s) => s.loc.clone(),
+            AstNode::StructDispPush { loc, ..} => loc.clone(),
+            // AstNode::StructItemPush { loc, .. } => loc.clone(),
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructDef {
+    pub loc: Loc,
+    pub ident: String,
+    pub body: Vec<(String, usize, TypeType)>, // (field ident, size in bytes)
+    pub size: usize
+}
 #[derive(Debug, Clone)]
 pub struct MemUse {
     pub loc: Loc,
     pub ident: String,
+    pub disp: Option<usize>
 }
 #[derive(Debug, Clone)]
 pub struct ConstUse {
@@ -119,8 +136,8 @@ pub struct Function {
     pub inline: bool,
     pub extrn: bool,
     pub export: bool,
-    pub arg_types: Vec<TokenType>,
-    pub ret_types: Vec<TokenType>,
+    pub arg_types: Vec<TypeType>,
+    pub ret_types: Vec<TypeType>,
     pub body: Vec<AstNode>
 }
 
@@ -136,7 +153,7 @@ pub struct Memory {
     pub loc: Loc,
     pub ident: String,
     pub statc: bool,
-    pub size: usize // bytes
+    pub size: MemSize // bytes
 }
 
 
@@ -146,6 +163,31 @@ pub struct Program {
     pub functions: HashMap<String, Function>,
     pub constants: HashMap<String, Constant>,
     pub memories: HashMap<String, Memory>,
+    pub struct_defs: HashMap<String, StructDef>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MemSize {
+    Size(usize),
+    Type(TypeType)
+}
+
+impl EscIdent for FnCall {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+}
+
+impl EscIdent for ConstUse {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+}
+
+impl EscIdent for MemUse {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
 }
 
 impl EscIdent for Constant {

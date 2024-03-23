@@ -3,7 +3,7 @@ mod utils;
 use std::path::PathBuf;
 use std::{fs::File, io::BufWriter, path::Path};
 use std::io::Write;
-use crate::types::ast::{AstNode, Function, Module, Program};
+use crate::types::ast::{AstNode, EscIdent, Function, MemSize, Module, Program};
 use crate::types::token::{InstructionType, Token, TokenType};
 
 use super::utils::run_cmd;
@@ -14,7 +14,8 @@ use super::Compiler;
 
 pub struct X86_64LinuxNasmCompiler {
     strings: Vec<String>,
-    func_mem_i: Vec<usize>,
+    // func_mem_i: Vec<usize>,
+    // func_mem_list: HashMap<String, usize>,
     if_i: usize,
     while_i: usize,
     used_consts: Vec<String>
@@ -272,13 +273,10 @@ impl X86_64LinuxNasmCompiler {
                     InstructionType::CastPtr |
                     InstructionType::CastInt |
                     InstructionType::CastVoid => (), //? Possibly have a use for this
-                    InstructionType::TypeBool |
-                    InstructionType::TypePtr |
-                    InstructionType::TypeInt |
-                    InstructionType::TypeVoid |
-                    InstructionType::TypeAny |
                     InstructionType::FnCall |
                     InstructionType::MemUse |
+                    InstructionType::StructPath(_) |
+                    InstructionType::StructItem(_) |
                     InstructionType::ConstUse => unreachable!(),
                     InstructionType::Return => {
                         writeln!(fd, "    sub rbp, 8")?;
@@ -289,29 +287,26 @@ impl X86_64LinuxNasmCompiler {
                 }
             },
             TokenType::Keyword(_) |
+            TokenType::Type(_) |
             TokenType::Unknown(_) => unreachable!(),
         }
         Ok(())
     }
 
     fn handle_module(&mut self, fd: &mut BufWriter<File>, prog: &Program, module: &Module) -> anyhow::Result<()> {
-        writeln!(fd, "; {} Module {} START", module.path.join("::"), module.ident)?;
+        writeln!(fd, "; {} Module START", module.path.join("::"))?;
         self.handle_ast_list(fd, prog, module.body.clone())?;
-        writeln!(fd, "; {} Module {} END", module.path.join("::"), module.ident)?;
+        writeln!(fd, "; {} Module END", module.path.join("::"))?;
         Ok(())
     }
 
     fn handle_function(&mut self, fd: &mut BufWriter<File>, prog: &Program, func: &Function) -> anyhow::Result<()> {
-        writeln!(fd, "{f}: ; fn {f}", f=func.ident)?;
-        writeln!(fd, "    pop rbx")?;
-        writeln!(fd, "    mov qword [rbp], rbx")?;
-        writeln!(fd, "    add rbp, 8")?;
+        writeln!(fd, "{f}: ; fn {f}", f=func.get_ident_escaped())?;
+        writeln!(fd, "    fn_setup")?;
         
         self.handle_ast_list(fd, prog, func.body.clone())?;
         
-        writeln!(fd, "    sub rbp, 8")?;
-        writeln!(fd, "    mov rbx, qword [rbp]")?;
-        writeln!(fd, "    push rbx")?;
+        writeln!(fd, "    fn_cleanup")?;
         writeln!(fd, "    ret")?;
         Ok(())
     }
@@ -355,21 +350,27 @@ impl X86_64LinuxNasmCompiler {
                     writeln!(fd, "; WHILE({id}) END")?;
                 },
                 AstNode::Module(m) => self.handle_module(fd, prog, m)?,
-                AstNode::Memory(m) => {
-                    if !m.statc {
-                        todo!()
-                    }
+                AstNode::Memory(_) => {
+                    //? Possibly allow stack based allocation somehow
+                    // if !m.statc {
+                    //     todo!()
+                    // }
                 },
-                AstNode::MemUse(_) => {
-                    
+                AstNode::MemUse(m) => {
+                    let tmp = if let Some(disp) = m.disp {
+                        format!("+{disp}")
+                    } else {
+                        String::new()
+                    };
+                    writeln!(fd, "    push m_{}{}", m.get_ident_escaped(), tmp)?;
                 },
                 AstNode::ConstUse(c) => {
-                    self.used_consts.push(c.ident.clone());
-                    writeln!(fd, "    mov rax, qword [c_{}]", c.ident)?;
+                    self.used_consts.push(c.get_ident_escaped());
+                    writeln!(fd, "    mov rax, qword [c_{}]", c.get_ident_escaped())?;
                     writeln!(fd, "    push rax")?;
                 },
                 AstNode::FnCall(f)=> {
-                    writeln!(fd, "    call {f} ; FUNCTIONCALL({f:?})", f=f.ident)?;
+                    writeln!(fd, "    call {f} ; FUNCTIONCALL({f:?})", f=f.get_ident_escaped())?;
                 },
                 AstNode::Block(b)=> {
                     writeln!(fd, "; BLOCK({}) START", b.comment)?;
@@ -381,6 +382,11 @@ impl X86_64LinuxNasmCompiler {
                 AstNode::Str(_, _) |
                 AstNode::CStr(_, _) |
                 AstNode::Char(_, _) => unreachable!(),
+                AstNode::StructDef(_) => (),
+                AstNode::StructDispPush { disp, ident, .. } => {
+                    writeln!(fd, "    mov rax, {} ; STRUCTDISPPUSH({})", disp, ident)?;
+                    writeln!(fd, "    push rax")?;
+                },
             }
         }
         Ok(())
@@ -395,6 +401,8 @@ impl Compiler for X86_64LinuxNasmCompiler {
             used_consts: Vec::new(),
             if_i: 0,
             while_i: 0,
+            // func_mem_i: Vec::new(),
+            // func_mem_list: HashMap::new(),
         }
     }
 
@@ -402,6 +410,18 @@ impl Compiler for X86_64LinuxNasmCompiler {
 
         writeln!(fd, "BITS 64")?;
         writeln!(fd, "segment .text")?;
+
+        writeln!(fd, "%macro fn_setup 0")?;
+        writeln!(fd, "    pop rbx")?;
+        writeln!(fd, "    mov qword [rbp], rbx")?;
+        writeln!(fd, "    add rbp, 8")?;
+        writeln!(fd, "%endmacro")?;
+        writeln!(fd, "%macro fn_cleanup 0")?;
+        writeln!(fd, "    sub rbp, 8")?;
+        writeln!(fd, "    mov rbx, qword [rbp]")?;
+        writeln!(fd, "    push rbx")?;
+        writeln!(fd, "%endmacro")?;
+
         writeln!(fd, "{}", utils::DBG_PRINT)?;
         writeln!(fd, "global _start")?;
         writeln!(fd, "_start:")?; 
@@ -425,22 +445,22 @@ impl Compiler for X86_64LinuxNasmCompiler {
         writeln!(fd, "segment .data")?;
         for (_, v) in prog.constants.iter() {
 
-            if !self.used_consts.contains(&v.ident) {
+            if !self.used_consts.contains(&v.get_ident_escaped()) {
                 continue;
             }
 
             match Box::leak(v.value.clone()) {
                 AstNode::Int(_, val) => {
-                    writeln!(fd, "c_{}: dq {}", v.ident, val)?;
+                    writeln!(fd, "    c_{}: dq {}", v.get_ident_escaped(), val)?;
                 }
                 AstNode::Str(_, val) |
                 AstNode::CStr(_, val) => {
                     let s_chars = val.chars().map(|c| (c as u32).to_string()).collect::<Vec<String>>();
                     let s_list = s_chars.join(",");
-                    writeln!(fd, "c_{}: db {} ; {}", v.ident, s_list, val.escape_debug())?;
+                    writeln!(fd, "    c_{}: db {} ; {}", v.get_ident_escaped(), s_list, val.escape_debug())?;
                 }
                 AstNode::Char(_, val) => {
-                    writeln!(fd, "c_{}: db {} ; '{}'", v.ident, *val as u8, val)?;
+                    writeln!(fd, "    c_{}: db {} ; '{}'", v.get_ident_escaped(), *val as u8, val)?;
                 }
                 c => panic!("{c:?}")
             };
@@ -449,12 +469,21 @@ impl Compiler for X86_64LinuxNasmCompiler {
         for (i, s) in self.strings.iter().enumerate() {
             let s_chars = s.chars().map(|c| (c as u32).to_string()).collect::<Vec<String>>();
             let s_list = s_chars.join(",");
-            writeln!(fd, "str_{i}: db {} ; STRDEF({})", s_list, s.escape_debug())?;
+            writeln!(fd, "    str_{i}: db {} ; STRDEF({})", s_list, s.escape_debug())?;
         }
         writeln!(fd, "segment .bss")?;
-        writeln!(fd, "ret_stack: resq 256")?;
+        writeln!(fd, "    ret_stack: resq 256")?;
 
-        //TODO: Memories
+        for (_, v) in &prog.memories {
+            match &v.size {
+                MemSize::Size(s) => {
+                    writeln!(fd, "    m_{}: resb {}", v.get_ident_escaped(), s)?;
+                },
+                MemSize::Type(tt) => {
+                    writeln!(fd, "    m_{}: resb {} ; {:?}", v.get_ident_escaped(), tt.get_size(), tt)?;
+                },
+            }
+        }
         
 
         Ok(())

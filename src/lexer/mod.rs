@@ -1,7 +1,7 @@
 use std::path::Path;
 use anyhow::bail;
 
-use crate::{error, types::{common::Loc, token::{InstructionType, KeywordType, Token, TokenType}}};
+use crate::{error, types::{common::Loc, token::{InstructionType, KeywordType, Token, TokenType, TypeType}}};
 
 
 
@@ -135,6 +135,88 @@ impl Lexer {
                     self.tokens.push(Token::new(TokenType::Instruction(InstructionType::PushStr(str)), self.loc(), buf.clone()));
                     buf.clear();
                 }
+                ':' if chars.get(idx + 1) == Some(&':') => {
+                    let mut p_buf = vec![buf.clone()];
+                    buf.clear();
+                    idx += 2; // skip ::
+                    self.loc.col += 2;
+
+                    while idx < chars.len() {
+                        match chars[idx] {
+                            ' ' | '\n' | '\r' => {
+                                if !p_buf.is_empty() {
+                                    p_buf.push(buf.clone());
+                                }
+
+                                self.tokens.push(Token::new(TokenType::Instruction(InstructionType::StructPath(p_buf.clone())), start_loc.clone(), p_buf.clone().join("::")));
+                                buf.clear();
+                                break;
+                            }
+                            c @ ('\'' | '"') => {
+                                error!({loc => self.loc()}, "Invalid char in struct path token, expected /a-z|A-Z|0-9|_|-/ got {c}");
+                                bail!("")
+                            }
+
+                            ':' if chars.get(idx + 1) == Some(&':') => {
+                                if buf.is_empty() {
+                                    error!({loc => self.loc()}, "Invalid char in struct path token, expected /a-z|A-Z|0-9|_|-/ got '.'");
+                                    bail!("")
+                                }
+                                idx += 2; // skip ::
+                                self.loc.col += 2;
+                                p_buf.push(buf.clone());
+                                buf.clear();
+                            }
+
+                            c => {
+                                buf.push(c);
+                                idx += 1;
+                                self.loc.inc_col();
+                            }
+                        }
+                    }
+                }
+
+                '.' if !buf.is_empty() => {
+                    let mut p_buf = vec![buf.clone()];
+                    buf.clear();
+                    idx += 1; // skip .
+                    self.loc.inc_col();
+
+                    while idx < chars.len() {
+                        match chars[idx] {
+                            ' ' | '\n' | '\r' => {
+                                if !p_buf.is_empty() {
+                                    p_buf.push(buf.clone());
+                                }
+                                self.tokens.push(Token::new(TokenType::Instruction(InstructionType::StructItem(p_buf.clone())), start_loc.clone(), p_buf.clone().join(".")));
+                                buf.clear();
+                                break;
+                            }
+                            c @ ('\'' | '"') => {
+                                error!({loc => self.loc()}, "Invalid char in struct access token, expected /a-z|A-Z|0-9|_|-/ got {c}");
+                                bail!("")
+                            }
+
+                            '.' => {
+                                if buf.is_empty() {
+                                    error!({loc => self.loc()}, "Invalid char in struct access token, expected /a-z|A-Z|0-9|_|-/ got '.'");
+                                    bail!("")
+                                }
+                                idx += 1; // skip .
+                                self.loc.col += 1;
+                                p_buf.push(buf.clone());
+                                buf.clear();
+                            }
+
+                            c => {
+                                buf.push(c);
+                                idx += 1;
+                                self.loc.inc_col();
+                            }
+                        }
+                    }
+                }
 
                 ch @ (' ' | '\n' | '\r') => {
                     if ch == '\n' {
@@ -219,66 +301,69 @@ impl Lexer {
 
     fn match_token_type(&self, s: &str) -> TokenType {
         match s {
-            "if"       => TokenType::Keyword(KeywordType::If),
-            "else"     => TokenType::Keyword(KeywordType::Else),
-            "end"      => TokenType::Keyword(KeywordType::End),
-            "while"    => TokenType::Keyword(KeywordType::While),
-            "do"       => TokenType::Keyword(KeywordType::Do),
-            "include"  => TokenType::Keyword(KeywordType::Include),
-            "memory"   => TokenType::Keyword(KeywordType::Memory),
-            "const"    => TokenType::Keyword(KeywordType::Constant),
-            "fn"       => TokenType::Keyword(KeywordType::Function),
-            "then"     => TokenType::Keyword(KeywordType::Then),
-            "done"     => TokenType::Keyword(KeywordType::Done),
-            "struct"   => TokenType::Keyword(KeywordType::Struct),
-            "inline"   => TokenType::Keyword(KeywordType::Inline),
-            "export"   => TokenType::Keyword(KeywordType::Export),
-            "extern"   => TokenType::Keyword(KeywordType::Extern),
-            "returns"  => TokenType::Keyword(KeywordType::Returns),
-            "with"     => TokenType::Keyword(KeywordType::With),
-            "drop"     => TokenType::Instruction(InstructionType::Drop),
-            "_dbg_print"=> TokenType::Instruction(InstructionType::Print),
-            "dup"      => TokenType::Instruction(InstructionType::Dup),
-            "rot"      => TokenType::Instruction(InstructionType::Rot),
-            "over"     => TokenType::Instruction(InstructionType::Over),
-            "swap"     => TokenType::Instruction(InstructionType::Swap),
-            "sub"      => TokenType::Instruction(InstructionType::Minus),
-            "add"      => TokenType::Instruction(InstructionType::Plus),
-            "eq"       => TokenType::Instruction(InstructionType::Equals),
-            "gt"       => TokenType::Instruction(InstructionType::Gt),
-            "lt"       => TokenType::Instruction(InstructionType::Lt),
-            "ge"       => TokenType::Instruction(InstructionType::Ge),
-            "le"       => TokenType::Instruction(InstructionType::Le),
-            "neq"      => TokenType::Instruction(InstructionType::NotEquals),
-            "band"     => TokenType::Instruction(InstructionType::Band),
-            "bor"      => TokenType::Instruction(InstructionType::Bor),
-            "shr"      => TokenType::Instruction(InstructionType::Shr),
-            "shl"      => TokenType::Instruction(InstructionType::Shl),
-            "divmod"   => TokenType::Instruction(InstructionType::DivMod),
-            "mul"      => TokenType::Instruction(InstructionType::Mul),
-            "read8"    => TokenType::Instruction(InstructionType::Read8),
-            "write8"   => TokenType::Instruction(InstructionType::Write8),
-            "read32"   => TokenType::Instruction(InstructionType::Read32),
-            "write32"  => TokenType::Instruction(InstructionType::Write32),
-            "read64"   => TokenType::Instruction(InstructionType::Read64),
-            "write64"  => TokenType::Instruction(InstructionType::Write64),
-            "syscall0" => TokenType::Instruction(InstructionType::Syscall0),
-            "syscall1" => TokenType::Instruction(InstructionType::Syscall1),
-            "syscall2" => TokenType::Instruction(InstructionType::Syscall2),
-            "syscall3" => TokenType::Instruction(InstructionType::Syscall3),
-            "syscall4" => TokenType::Instruction(InstructionType::Syscall4),
-            "syscall5" => TokenType::Instruction(InstructionType::Syscall5),
-            "syscall6" => TokenType::Instruction(InstructionType::Syscall6),
-            "(bool)"   => TokenType::Instruction(InstructionType::CastBool),
-            "(ptr)"    => TokenType::Instruction(InstructionType::CastPtr),
-            "(int)"    => TokenType::Instruction(InstructionType::CastInt),
-            "(void)"   => TokenType::Instruction(InstructionType::CastVoid),
-            "bool"     => TokenType::Instruction(InstructionType::TypeBool),
-            "ptr"      => TokenType::Instruction(InstructionType::TypePtr),
-            "int"      => TokenType::Instruction(InstructionType::TypeInt),
-            "void"     => TokenType::Instruction(InstructionType::TypeVoid),
-            "any"      => TokenType::Instruction(InstructionType::TypeAny),
-            "return"   => TokenType::Instruction(InstructionType::Return),
+            "if"         => TokenType::Keyword(KeywordType::If),
+            "else"       => TokenType::Keyword(KeywordType::Else),
+            "end"        => TokenType::Keyword(KeywordType::End),
+            "while"      => TokenType::Keyword(KeywordType::While),
+            "do"         => TokenType::Keyword(KeywordType::Do),
+            "include"    => TokenType::Keyword(KeywordType::Include),
+            "memory"     => TokenType::Keyword(KeywordType::Memory),
+            "const"      => TokenType::Keyword(KeywordType::Constant),
+            "fn"         => TokenType::Keyword(KeywordType::Function),
+            "then"       => TokenType::Keyword(KeywordType::Then),
+            "done"       => TokenType::Keyword(KeywordType::Done),
+            "typedef"    => TokenType::Keyword(KeywordType::TypeDef),
+            "structdef"  => TokenType::Keyword(KeywordType::StructDef),
+            "inline"     => TokenType::Keyword(KeywordType::Inline),
+            "export"     => TokenType::Keyword(KeywordType::Export),
+            "extern"     => TokenType::Keyword(KeywordType::Extern),
+            "returns"    => TokenType::Keyword(KeywordType::Returns),
+            "with"       => TokenType::Keyword(KeywordType::With),
+            "drop"       => TokenType::Instruction(InstructionType::Drop),
+            "_dbg_print" => TokenType::Instruction(InstructionType::Print),
+            "dup"        => TokenType::Instruction(InstructionType::Dup),
+            "rot"        => TokenType::Instruction(InstructionType::Rot),
+            "over"       => TokenType::Instruction(InstructionType::Over),
+            "swap"       => TokenType::Instruction(InstructionType::Swap),
+            "sub"        => TokenType::Instruction(InstructionType::Minus),
+            "add"        => TokenType::Instruction(InstructionType::Plus),
+            "eq"         => TokenType::Instruction(InstructionType::Equals),
+            "gt"         => TokenType::Instruction(InstructionType::Gt),
+            "lt"         => TokenType::Instruction(InstructionType::Lt),
+            "ge"         => TokenType::Instruction(InstructionType::Ge),
+            "le"         => TokenType::Instruction(InstructionType::Le),
+            "neq"        => TokenType::Instruction(InstructionType::NotEquals),
+            "band"       => TokenType::Instruction(InstructionType::Band),
+            "bor"        => TokenType::Instruction(InstructionType::Bor),
+            "shr"        => TokenType::Instruction(InstructionType::Shr),
+            "shl"        => TokenType::Instruction(InstructionType::Shl),
+            "divmod"     => TokenType::Instruction(InstructionType::DivMod),
+            "mul"        => TokenType::Instruction(InstructionType::Mul),
+            "read8"      => TokenType::Instruction(InstructionType::Read8),
+            "write8"     => TokenType::Instruction(InstructionType::Write8),
+            "read32"     => TokenType::Instruction(InstructionType::Read32),
+            "write32"    => TokenType::Instruction(InstructionType::Write32),
+            "read64"     => TokenType::Instruction(InstructionType::Read64),
+            "write64"    => TokenType::Instruction(InstructionType::Write64),
+            "syscall0"   => TokenType::Instruction(InstructionType::Syscall0),
+            "syscall1"   => TokenType::Instruction(InstructionType::Syscall1),
+            "syscall2"   => TokenType::Instruction(InstructionType::Syscall2),
+            "syscall3"   => TokenType::Instruction(InstructionType::Syscall3),
+            "syscall4"   => TokenType::Instruction(InstructionType::Syscall4),
+            "syscall5"   => TokenType::Instruction(InstructionType::Syscall5),
+            "syscall6"   => TokenType::Instruction(InstructionType::Syscall6),
+            "(bool)"     => TokenType::Instruction(InstructionType::CastBool),
+            "(ptr)"      => TokenType::Instruction(InstructionType::CastPtr),
+            "(int)"      => TokenType::Instruction(InstructionType::CastInt),
+            "(void)"     => TokenType::Instruction(InstructionType::CastVoid),
+            "return"     => TokenType::Instruction(InstructionType::Return),
+            "ptr"        => TokenType::Type(TypeType::Ptr),
+            "u8"         => TokenType::Type(TypeType::U8),
+            "u16"        => TokenType::Type(TypeType::U16),
+            "u32"        => TokenType::Type(TypeType::U32),
+            "u64"        => TokenType::Type(TypeType::U64),
+            "void"       => TokenType::Type(TypeType::Void),
+            "any"        => TokenType::Type(TypeType::Any),
             t => TokenType::Unknown(t.to_string())
         }
     }

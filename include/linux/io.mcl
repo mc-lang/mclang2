@@ -1,14 +1,14 @@
 
-fn fwrite with int ptr int returns int then
+fn fwrite with u64 ptr u64 returns u64 then
     SYS_write syscall3
 done
 
 
 
-fn puts with int ptr int returns int then
+fn puts with u64 ptr u64 returns u64 then
     STDOUT fwrite drop
 done
 
-fn eputs with int ptr int returns int then
+fn eputs with u64 ptr u64 returns u64 then
     STDERR fwrite drop
 done

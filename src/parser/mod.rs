@@ -6,7 +6,7 @@ use std::{collections::HashMap, path::Path};
 
 use anyhow::{bail, Result};
 
-use crate::{cli::CliArgs, lexer::Lexer, types::{ast::{AstNode, Block, ConstUse, Constant, FnCall, Function, If, MemUse, Memory, Module, Program, While}, common::Loc, token::{InstructionType, KeywordType, Token, TokenType}}};
+use crate::{cli::CliArgs, lexer::Lexer, types::{ast::{AstNode, Block, ConstUse, Constant, FnCall, Function, If, MemSize, MemUse, Memory, Module, Program, StructDef, While}, common::Loc, token::{InstructionType, KeywordType, Token, TokenType, TypeType}}};
 
 use self::{builtin::get_builtin_symbols, precompiler::{precompile_const, precompile_mem}, utils::{expect, peek_check, peek_check_multiple, PeekResult}};
 
@@ -16,6 +16,7 @@ bitflags::bitflags! {
         const EXTERN = 1 << 0;
         const EXPORT = 1 << 1;
         const INLINE = 1 << 2;
+        const ALLOW_TYPES = 1 << 3;
     }
 }
 
@@ -35,7 +36,7 @@ pub fn parse(cli_args: &CliArgs, tokens: &mut Vec<Token>) -> Result<Program> {
         functions: HashMap::new(),
         constants: HashMap::new(),
         memories: HashMap::new(),
-        
+        struct_defs: HashMap::new()
     };
 
     let syms = get_builtin_symbols(&mut prog);
@@ -67,16 +68,17 @@ fn parse_next(cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, f
     let ret = match &token.typ {
         TokenType::Keyword(kw) => {
             match kw {
-                KeywordType::If       => parse_if(&token, cli_args, prog, tokens)?,
-                KeywordType::While    => parse_while(&token, cli_args, prog, tokens)?,
-                KeywordType::Include  => parse_include(&token, cli_args, prog, tokens)?,
-                KeywordType::Memory   => parse_memory(&token, cli_args, prog, tokens, is_module_root)?,
-                KeywordType::Constant => parse_const(&token, cli_args, prog, tokens)?,
-                KeywordType::Function => parse_function(&token, cli_args, prog, tokens, flags)?,
-                KeywordType::Struct   => todo!(),
-                KeywordType::Inline   => parse_inline(&token, cli_args, prog, tokens, flags)?,
-                KeywordType::Export   => parse_export(&token, cli_args, prog, tokens, flags)?,
-                KeywordType::Extern   => parse_extern(&token, cli_args, prog, tokens, flags)?,
+                KeywordType::If        => parse_if(&token, cli_args, prog, tokens)?,
+                KeywordType::While     => parse_while(&token, cli_args, prog, tokens)?,
+                KeywordType::Include   => parse_include(&token, cli_args, prog, tokens)?,
+                KeywordType::Memory    => parse_memory(&token, cli_args, prog, tokens, is_module_root)?,
+                KeywordType::Constant  => parse_const(&token, cli_args, prog, tokens)?,
+                KeywordType::Function  => parse_function(&token, cli_args, prog, tokens, flags)?,
+                KeywordType::StructDef => parse_struct(&token, cli_args, prog, tokens)?,
+                KeywordType::TypeDef   => todo!(),
+                KeywordType::Inline    => parse_inline(&token, cli_args, prog, tokens, flags)?,
+                KeywordType::Export    => parse_export(&token, cli_args, prog, tokens, flags)?,
+                KeywordType::Extern    => parse_extern(&token, cli_args, prog, tokens, flags)?,
                 kw => {
                     dbg!(&prog.constants);
                     error!({loc => token.loc}, "Unexpected token {kw:?}");
@@ -89,7 +91,11 @@ fn parse_next(cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, f
                 error!({loc => token.loc}, "Unexpected token {it:?}, please create a main function, this is not a scripting language");
                 bail!("")
             } else {
-                AstNode::Token(token)
+                match it {
+                    InstructionType::StructPath(p) => parse_struct_path(&token, prog, p)?,
+                    InstructionType::StructItem(p) => parse_struct_item(&token, prog, p)?,
+                    _ => AstNode::Token(token)
+                }
             }
         },
         TokenType::Unknown(ut) => {
@@ -101,8 +107,160 @@ fn parse_next(cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, f
                 parse_unknown(&token, cli_args, prog, tokens, flags)?
             }
         },
+        TokenType::Type(t) => {
+            if flags.contains(Flags::ALLOW_TYPES) {
+                AstNode::Token(token)
+            } else {
+                error!({loc => token.loc}, "Unexpected type {t:?}");
+                bail!("")
+            }
+        },
     };
     Ok(ret)
+}
+
+fn parse_struct_item(org: &Token, prog: &mut Program, p: &Vec<String>) -> Result<AstNode> {
+    fn find_disp(strct: &StructDef, disp: &mut usize, path: &[String]) {
+        let Some(p) = path.get(0) else {
+            return
+        };
+
+        for item in &strct.body {
+            if p == &item.0 {
+                match &item.2 {
+                    TypeType::Struct(strct) => {
+                        *disp += item.1;
+                        find_disp(strct, disp, &path[1..])
+                    },
+                    _ => {
+                        *disp += item.1;
+                    }
+                }
+            }
+        }
+
+    }
+    if let Some(mem) = prog.memories.get(&p[0].to_string()) {
+        match &mem.size {
+            MemSize::Size(_) => {
+                error!({loc => org.loc()}, "You can only access items in structs");
+                bail!("")
+            },
+            MemSize::Type(t) => {
+                match t {
+                    TypeType::Struct(s) => {
+
+                        let mut disp = 0;
+                        find_disp(&s, &mut disp, &p[1..]);
+                        return Ok(AstNode::MemUse(MemUse{
+                            ident: p[0].clone(),
+                            loc: org.loc(),
+                            disp: Some(disp)
+                        }));
+                    },
+                    _ => {
+                        error!({loc => org.loc()}, "You can only access items in structs");
+                        bail!("")
+                    }
+                }
+            },
+        }
+    }
+
+    error!("Failed to find memory {}", p[0]);
+    bail!("")
+}
+
+fn parse_struct_path(org: &Token, prog: &mut Program, p: &Vec<String>) -> Result<AstNode> {
+
+    fn find_disp(strct: &StructDef, disp: &mut usize, path: &[String]) {
+        let Some(p) = path.get(0) else {
+            return
+        };
+
+        for item in &strct.body {
+            if p == &item.0 {
+                match &item.2 {
+                    TypeType::Struct(strct) => {
+                        *disp += item.1;
+                        find_disp(strct, disp, &path[1..])
+                    },
+                    _ => {
+                        *disp += item.1;
+                    }
+                }
+            }
+        }
+
+    }
+    let mut disp = 0;
+    if let Some(strct) = prog.struct_defs.get(&p[0].to_string()) {
+        find_disp(strct, &mut disp, &p[1..]);
+        return Ok(AstNode::StructDispPush{
+            ident: org.lexem.clone(),
+            loc: org.loc(),
+            disp
+        });
+    }
+
+    error!("Failed to find struct {}", p[0]);
+    bail!("")
+}
+
+fn parse_struct(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>) -> Result<AstNode> {
+    let ident = expect(tokens, TokenType::Unknown(String::new()))?;
+    expect(tokens, TokenType::Keyword(KeywordType::Do))?;
+
+
+    let mut body: Vec<(String, usize, TypeType)> = Vec::new();
+    let mut size = 0;
+
+    loop {
+        let ident = expect(tokens, TokenType::Unknown(String::new()))?;
+        expect(tokens, TokenType::Keyword(KeywordType::Do))?;
+        let typ = parse_next(cli_args, prog, tokens, Flags::ALLOW_TYPES, false)?;
+        let (typ, disp) = match &typ {
+            AstNode::Token(t) => {
+                match &t.typ {
+                    TokenType::Type(t) => {
+                        let disp = size;
+                        size += t.get_size();
+                        (t, disp)
+                    }
+                    _ => {
+                        error!({loc => t.loc()}, "Expected type, got {t:?}");
+                        bail!("")
+                    }
+                }
+            },
+            t => {
+                error!({loc => typ.loc()}, "Expected type, got {t:?}");
+                bail!("")
+            }
+        };
+        expect(tokens, TokenType::Keyword(KeywordType::End))?;
+
+        body.push((ident.lexem, disp, typ.clone()));
+
+        if peek_check(tokens, TokenType::Keyword(KeywordType::Done)).correct(){
+            tokens.pop();
+            break;
+        }
+        // if peek_check(tokens, TokenType::Keyword(KeywordType::End)).correct()
+    };
+
+
+
+    let def = StructDef{
+        loc: org.loc(),
+        ident: ident.lexem.clone(),
+        body,
+        size,
+    };
+
+    prog.struct_defs.insert(ident.lexem, def.clone());
+
+    Ok(AstNode::StructDef(def))
 }
 
 fn parse_memory(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut Vec<Token>, is_module_root: bool) -> Result<AstNode> {
@@ -118,7 +276,7 @@ fn parse_memory(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mu
             PeekResult::Wrong(_) => (),
             PeekResult::None => panic!("idk what to do herre"),
         }
-        body.push(parse_next(cli_args, prog, tokens, Flags::empty(), false)?);
+        body.push(parse_next(cli_args, prog, tokens, Flags::ALLOW_TYPES, false)?);
     }
     expect(tokens, TokenType::Keyword(KeywordType::End))?;
 
@@ -152,13 +310,21 @@ fn parse_function(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &
     
     loop {
         if let PeekResult::Correct(t) = peek_check_multiple(tokens, vec![
-            TokenType::Instruction(InstructionType::TypeAny),
-            TokenType::Instruction(InstructionType::TypeBool),
-            TokenType::Instruction(InstructionType::TypeInt),
-            TokenType::Instruction(InstructionType::TypePtr),
-            TokenType::Instruction(InstructionType::TypeVoid),
+            TokenType::Type(TypeType::Any),
+            TokenType::Type(TypeType::U8),
+            TokenType::Type(TypeType::U16),
+            TokenType::Type(TypeType::U32),
+            TokenType::Type(TypeType::U64),
+            TokenType::Type(TypeType::Ptr),
+            TokenType::Type(TypeType::Void),
+            TokenType::Type(TypeType::Custom(Vec::new())),
         ]) {
-            args.push(t.typ.clone());
+            match &t.typ {
+                TokenType::Type(tt) => {
+                    args.push(tt.clone());
+                }
+                _ => unreachable!()
+            }
         } else {
             break;
         }
@@ -171,13 +337,21 @@ fn parse_function(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &
     
     loop {
         if let PeekResult::Correct(t) = peek_check_multiple(tokens, vec![
-            TokenType::Instruction(InstructionType::TypeAny),
-            TokenType::Instruction(InstructionType::TypeBool),
-            TokenType::Instruction(InstructionType::TypeInt),
-            TokenType::Instruction(InstructionType::TypePtr),
-            TokenType::Instruction(InstructionType::TypeVoid),
+            TokenType::Type(TypeType::Any),
+            TokenType::Type(TypeType::U8),
+            TokenType::Type(TypeType::U16),
+            TokenType::Type(TypeType::U32),
+            TokenType::Type(TypeType::U64),
+            TokenType::Type(TypeType::Ptr),
+            TokenType::Type(TypeType::Void),
+            TokenType::Type(TypeType::Custom(Vec::new())),
         ]) {
-            ret_args.push(t.typ.clone());
+            match &t.typ {
+                TokenType::Type(tt) => {
+                    ret_args.push(tt.clone());
+                }
+                _ => unreachable!()
+            }
         } else {
             break;
         }
@@ -235,7 +409,7 @@ fn parse_if(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut Ve
             PeekResult::Wrong(w) => {
                 match w.typ {
                     TokenType::Keyword(KeywordType::Then) => {
-                        warn!("If is defined as `if ... do ... done`");
+                        warn!({loc => w.loc()}, "If is defined as `if ... do ... done`");
                     }
                     _ => ()
                 }
@@ -502,6 +676,7 @@ fn parse_include(_: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut
                 functions: prog.functions.clone(),
                 constants: prog.constants.clone(),
                 memories: prog.memories.clone(),
+                struct_defs: prog.struct_defs.clone(),
                 
             };
             
@@ -563,7 +738,7 @@ fn parse_const(org: &Token, cli_args: &CliArgs, prog: &mut Program, tokens: &mut
 
 fn parse_unknown(org: &Token, _: &CliArgs, prog: &mut Program, _: &mut Vec<Token>, _: Flags ) -> Result<AstNode> {
     //TODO: Typing?
-    if let Some(func) = prog.functions.get(&org.lexem) {
+    if let Some(func) = prog.functions.get(&org.lexem.clone()) {
         if func.inline {
             return Ok(AstNode::Block(Block{ loc: org.loc.clone(), body: func.body.clone(), comment: format!("inline fn {}", func.ident) }))
         } else {
@@ -571,15 +746,42 @@ fn parse_unknown(org: &Token, _: &CliArgs, prog: &mut Program, _: &mut Vec<Token
         }
     }
 
-    if let Some(_) = prog.constants.get(&org.lexem) {
+    if let Some(_) = prog.constants.get(&org.lexem.clone()) {
         return Ok(AstNode::ConstUse(ConstUse{ loc: org.loc.clone(), ident: org.lexem.clone() }));
     }
 
-    if let Some(_) = prog.memories.get(&org.lexem) {
-        return Ok(AstNode::MemUse(MemUse{ loc: org.loc.clone(), ident: org.lexem.clone() }));
+    if let Some(_) = prog.memories.get(&org.lexem.clone()) {
+        return Ok(AstNode::MemUse(MemUse{ loc: org.loc.clone(), ident: org.lexem.clone(), disp: None }));
     }
 
-    dbg!(&prog.constants);
+    if let Some(t) = prog.struct_defs.get(&org.lexem.clone()) {
+        return Ok(AstNode::Token(Token {
+            typ: TokenType::Type(TypeType::Struct(t.clone())),
+            loc: org.loc(),
+            lexem: org.lexem.clone(),
+        }));
+    }
+
+
+    // if org.lexem.clone().contains("::") {
+    //     let pth = org.lexem.clone();
+    //     let pth = pth.split("::").collect::<Vec<&str>>();
+    //     dbg!(prog.struct_defs.clone());
+    //     if let Some(t) = prog.struct_defs.get(&pth[0].to_string()) {
+    //         if let Some(i) = t.body.iter().find(|i| i.0 == pth[1].to_string()) {
+    //             return Ok(AstNode::StructDispPush{
+    //                 ident: org.lexem.clone(),
+    //                 loc: org.loc(),
+    //                 disp: i.1
+    //             });
+
+    //         }
+    //     }
+    // }
+
+
+    // dbg!(&prog.constants);
+    debug!({loc => org.loc.clone()}, "Unknown token");
     error!({loc => org.loc.clone()}, "Unknown token {:?}", org);
     bail!("")
 }

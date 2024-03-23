@@ -41,6 +41,9 @@ pub fn cmp(lhs: &TokenType, rhs: &TokenType) -> bool {
         (TokenType::Instruction(lhs), TokenType::Instruction(rhs)) => {
             std::mem::discriminant(lhs) == std::mem::discriminant(rhs)
         },
+        (TokenType::Type(lhs), TokenType::Type(rhs)) => {
+            std::mem::discriminant(lhs) == std::mem::discriminant(rhs)
+        },
         (TokenType::Unknown(_), TokenType::Unknown(_)) => true,
         _ => false
     }
@@ -50,7 +53,7 @@ pub fn peek_check_multiple(tokens: &Vec<Token>, typs: Vec<TokenType>) -> PeekRes
     let t = tokens.last();
     
     if let Some(t) = t {
-        for tt in typs {
+        for tt in typs.clone() {
             if cmp(&t.typ, &tt) {
                 return PeekResult::Correct(t);
             }
@@ -86,7 +89,7 @@ pub fn expect(tokens: &mut Vec<Token>, typ: TokenType) -> Result<Token> {
         Some(t) => {
             //? Source: https://doc.rust-lang.org/std/mem/fn.discriminant.html
             if std::mem::discriminant(&t.typ) != std::mem::discriminant(&typ) {
-                error!("Expected {:?}, but got {:?}", typ, t.typ);
+                error!({loc => t.loc()}, "Expected {:?}, but got {:?}", typ, t.typ);
                 bail!("")
             }
             Ok(t)

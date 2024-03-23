@@ -1,17 +1,56 @@
 use anyhow::bail;
 
-use crate::types::{ast::{AstNode, Program}, common::Loc, token::{InstructionType, TokenType}};
+use crate::types::{ast::{AstNode, MemSize, Program}, common::Loc, token::{InstructionType, TokenType, TypeType}};
 
 
-pub fn precompile_mem(prog: &Program, ast: Vec<AstNode> ) -> anyhow::Result<usize> {
+pub fn precompile_mem(prog: &Program, ast: Vec<AstNode> ) -> anyhow::Result<MemSize> {
+    match &ast[0] {
+        AstNode::Token(t) => {
+            match &t.typ {
+                TokenType::Type(_) => {
+                    let mut buf = vec![];
+                    let mut i = 0;
+                    while ast.len() > i {
+                        match &ast[i] {
+                            AstNode::Token(t) => {
+                                match &t.typ {
+                                    TokenType::Type(t) => {
+                                        match t {
+                                            TypeType::Struct(s) => {
+                                                return Ok(MemSize::Type(TypeType::Struct(s.clone())));
+                                            },
+                                            _ => ()
+                                        }
+                                        buf.push(t.clone());
+                                        i += 1;
+                                    }
+                                    _ => {
+                                        error!({loc => t.loc()}, "Cannot use a type and a number as a memory size at the same time");
+                                        bail!("")
+                                    }
+                                }
+                            },
+                            _ => {
+                                error!({loc => t.loc()}, "Cannot use a type and a number as a memory size at the same time");
+                                        bail!("")
+                            }
+                        }
+                    }
+                    return Ok(MemSize::Type(TypeType::Custom(buf)));
+                }
+                _ => ()
+            }
+        },
+        _ => (),
+    }
     match precompile_const(prog, ast, &mut Vec::new()) {
         Ok(v) => {
             match v {
                 AstNode::Int(_, i) => {
-                    return Ok(i)
+                    return Ok(MemSize::Size(i))
                 }
                 _ => {
-                    error!("memories can only have numbers or types in their size");
+                    error!({loc => v.loc()}, "Can only have a type or a number as a memory size");
                     bail!("")
                 }
             }
@@ -142,7 +181,11 @@ pub fn precompile_const(prog: &Program, ast: Vec<AstNode>, stack: &mut Vec<usize
                             }
                         }
                     },
-                    TokenType::Unknown(_) => todo!(),
+                    TokenType::Unknown(_) => unreachable!(),
+                    TokenType::Type(_) => {
+                        error!({loc => t.loc()}, "Cannot use a type and a number as a memory size at the same time");
+                        bail!("")
+                    },
                 }   
             },
             //TODO: Implement these
