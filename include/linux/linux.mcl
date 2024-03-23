@@ -1,2 +1,0 @@
-include "linux/syscalls.mcl"
-include "linux/io.mcl"
