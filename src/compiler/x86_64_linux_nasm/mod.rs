@@ -203,7 +203,7 @@ impl X86_64LinuxNasmCompiler {
                         writeln!(fd, "    mov dword[rax], ebx")?;
                     },
                     InstructionType::Read64 => {
-                        writeln!(fd, "    pop rax ; READ 32")?;
+                        writeln!(fd, "    pop rax ; READ 64")?;
                         writeln!(fd, "    xor rbx, rbx")?;
                         writeln!(fd, "    mov rbx, qword [rax]")?;
                         writeln!(fd, "    push rbx")?;
